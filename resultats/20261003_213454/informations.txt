@@ -1,0 +1,17 @@
+Application : tri_benchmark
+Identifiant : 20261003_213454
+Graine : 1791063294
+Repetitions : 20
+Limite lente : 20000
+Taille maximale : 20000
+Choix : 1
+Tailles : 100 500 1000 5000 10000 20000
+Temps : secondes; minimum et moyenne arithmetique.
+Compteurs : un passage separe sur la repetition 1 (pas une moyenne).
+Comparaisons : valeurs entre elles ou valeur/pivot.
+Mouvements : ecritures de tableaux, tampon fusion inclus; un swap vaut 3.
+Generation/copies/verification exclues des temps et compteurs.
+Entrees : xorshift32, valeurs aleatoires de 0 a 1000000.
+Pivots : srand(graine_pivot), rand() du GCC utilise pour compiler.
+Graines de chaque repetition dans mesures.csv; algorithme de derivation dans tri.c.
+non_mesure : test ignore au-dela de la limite lente.

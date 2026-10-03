@@ -1,0 +1,12 @@
+set encoding utf8
+set terminal pngcairo size 1024,768 font 'Arial,10'
+set output 'graphiques/20261003_213454/configurations/croissant.png'
+set datafile missing 'non_mesure'
+set datafile separator ';'
+set title 'Comparaison - Tableau deja trie'
+set xlabel 'Taille du tableau (N)'
+set ylabel 'Temps minimum (secondes)'
+set grid
+set yrange [0:*]
+plot 'resultats/20261003_213454/croissant.csv' every ::1 using 1:2 title 'Tri par selection' with linespoints, 'resultats/20261003_213454/croissant.csv' every ::1 using 1:4 title 'Tri a bulles' with linespoints, 'resultats/20261003_213454/croissant.csv' every ::1 using 1:6 title 'Tri par insertion' with linespoints, 'resultats/20261003_213454/croissant.csv' every ::1 using 1:8 title 'Tri rapide' with linespoints, 'resultats/20261003_213454/croissant.csv' every ::1 using 1:10 title 'Tri fusion' with linespoints, 'resultats/20261003_213454/croissant.csv' every ::1 using 1:12 title 'Tri par tas' with linespoints
+unset output
