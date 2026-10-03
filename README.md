@@ -95,11 +95,6 @@ menu 5 apres installation/configuration, ou lancer les scripts depuis ce dossier
 ```powershell
 gnuplot "graphiques/<run-id>/algorithm_benchmark/algorithm_benchmark.plt"
 ```
-
-## Verification
-
-```powershell
-python tests/verify.py
 ```
 
 Ce controle compile les tests de tri dans un dossier temporaire, compare les
