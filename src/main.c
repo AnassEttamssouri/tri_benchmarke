@@ -32,7 +32,7 @@ int main(void)
 
     //géneration de la comparaison globale entre les algorithmes :
     generate_global_comparaison(BENCHMARK_RESULTS_FILE,sizes,num_sizes);
-    generate_global_comparaison_plot(gp,BENCHMARK_RESULTS_FILE,sizes,num_sizes);
+    generate_global_comparaison_plot(gp,BENCHMARK_RESULTS_FILE);
 
     //géneration des cas favorables , non favorables des algorithmes : 
     benchmark_algorithm_cases("./results/cases/selection_sort_cases.dat",selectionSort,sizes,num_sizes);

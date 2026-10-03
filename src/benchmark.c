@@ -268,6 +268,27 @@ void benchmark_algorithm_quick(
     fclose(file);
 }
 
+
+
+int generate_sizes(int start_size  , int jump , int end_size, int ** sizes){
+    if(start_size <= 0 || end_size <= start_size || jump <=  0){
+        return 0 ; 
+    }
+
+    int count = ((end_size-start_size)/jump )+ 1;
+
+    *sizes = (int*) malloc(count*sizeof(int));
+    if(*sizes == NULL){
+        return 0;
+    }
+    for(int i = 0 ; i < count ; i++){
+        *((*sizes)+i) = start_size + i*jump;
+    }
+    
+    return count;
+}
+
+
 void generateSorted(int **arr, int n){
     *arr = (int*) malloc(n*sizeof(int));
     for(int i = 0 ; i < n ; i++){

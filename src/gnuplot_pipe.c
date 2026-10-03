@@ -18,24 +18,6 @@ void gnuplot_close(FILE* gp){
 }
 
 
-int generate_sizes(int start_size  , int jump , int end_size, int ** sizes){
-    if(start_size <= 0 || end_size <= start_size || jump <=  0){
-        return 0 ; 
-    }
-
-    int count = ((end_size-start_size)/jump )+ 1;
-
-    *sizes = (int*) malloc(count*sizeof(int));
-    if(*sizes == NULL){
-        return 0;
-    }
-    for(int i = 0 ; i < count ; i++){
-        *((*sizes)+i) = start_size + i*jump;
-    }
-    
-    return count;
-}
-
 
 
 void create_directories(void)
@@ -47,7 +29,7 @@ void create_directories(void)
 }
 
 
-void generate_global_comparaison_plot(FILE* gp,char* filename,int* sizes,int count){
+void generate_global_comparaison_plot(FILE* gp,char* filename){
     fprintf(gp, "set terminal pngcairo size 1024,768 font 'Arial,10'\n");
 
     fprintf(gp, "set output 'plots/algorithm_benchmark/algorithm_benchmark.png'\n");
