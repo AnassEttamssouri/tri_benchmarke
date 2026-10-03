@@ -1,7 +1,7 @@
-#include "sort.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include "sort.h"
 
 
 
@@ -204,3 +204,36 @@ void bubbleSort(int *arr, int n)
             break;
     }
 }
+
+
+
+//heapSort : 
+void heapify(int *arr , int s ,int i){
+    int l=(i*2) + 1;//left child
+    int r=(i*2) + 2;
+    int max =i;
+    if(arr[l]> arr[max]){
+        max=l;
+    }
+    if(arr[r]>arr[max]){
+        max=r;
+    }
+    if (max!=i){
+        swap(arr[i],arr[max]);
+        heapify(arr,s,max);
+    }
+
+}
+void buildHeap(int arr[],int n){
+    for (int i=(n/2) -1;i>0;i--){
+        heapify(arr,n,i);
+    }
+}
+
+void heapSort(int arr[], int n){
+    buildHeap(arr,n);
+    for (int i=n-1;i>=0;i--){
+        swap(arr[0],arr[i]);
+        heapify(arr,n,0);
+    }
+} 
