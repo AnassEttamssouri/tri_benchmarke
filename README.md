@@ -95,10 +95,3 @@ menu 5 apres installation/configuration, ou lancer les scripts depuis ce dossier
 ```powershell
 gnuplot "graphiques/<run-id>/algorithm_benchmark/algorithm_benchmark.plt"
 ```
-```
-
-Ce controle compile les tests de tri dans un dossier temporaire, compare les
-versions normales et comptees a `qsort`, verifie les compteurs sur de petits
-tableaux et teste le menu, les fichiers, Gnuplot et un million d'elements avec
-une repetition. Les resultats de verification restent hors des dossiers de run
-de l'application.
