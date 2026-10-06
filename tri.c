@@ -48,7 +48,7 @@ static void K(bubbleSort)(int *arr, int n)
 
 static int K(partition)(int *arr, int low, int high)
 {
-    int random_pivot = low + rand() % (high - low + 1);
+    int random_pivot = tirer_pivot(low, high);
     K(swap)(&arr[random_pivot], &arr[high]);
     int pivot = arr[high], i = low - 1;
     for (int j = low; j < high; ++j)
@@ -153,6 +153,9 @@ static void K(dispatch)(Algorithme algorithme, int *arr, int *temp, int n, int m
 #include <string.h>
 #include <windows.h>
 
+static uint32_t etat_pivots = 1;
+static int tirer_pivot(int low, int high);
+
 #define TRI_KERNEL_PASS
 #define K(name) plain_##name
 #define LT(a,b) ((a) < (b))
@@ -220,6 +223,20 @@ uint32_t nombre_aleatoire(uint32_t *etat)
     x ^= x << 13; x ^= x >> 17; x ^= x << 5;
     *etat = x;
     return x;
+}
+void initialiser_pivots(uint32_t graine)
+{
+    etat_pivots = graine ? graine : 1u;
+}
+/* xorshift32 has 2^32-1 nonzero outputs. Subtract one to get [0,2^32-2],
+   then accept only a multiple of the partition width before taking modulo. */
+static int tirer_pivot(int low, int high)
+{
+    uint32_t largeur = (uint32_t)(high - low + 1);
+    uint32_t limite = UINT32_MAX - UINT32_MAX % largeur;
+    uint32_t valeur;
+    do { valeur = nombre_aleatoire(&etat_pivots) - 1u; } while (valeur >= limite);
+    return low + (int)(valeur % largeur);
 }
 uint32_t graine_experience(uint32_t seed, Configuration c, int n, int r, int pivot)
 {
@@ -302,17 +319,22 @@ int executer_experience(int n, Configuration c, const Parametres *p, uint32_t se
         !QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0) {
         fputs("Parametres ou chronometre invalides.\n", stderr); return 0;
     }
+    int eligibles = 0;
+    for (int a = 0; a < NOMBRE_ALGORITHMES; ++a) {
+        result->effectue[a] = algorithme_eligible((Algorithme)a, c, n, p->limite_lente);
+        eligibles += result->effectue[a];
+        result->minimum[a] = DBL_MAX;
+        if (progress && !result->effectue[a] && c < QUICK_EQUILIBRE)
+            printf("  %s : non_mesure (limite %d)\n", nom_algorithme((Algorithme)a), p->limite_lente);
+    }
+    result->graine_entree = graine_experience(seed, c, n, 0, 0);
+    result->graine_pivot = graine_experience(seed, c, n, 0, 1);
+    if (!eligibles) return 1; /* No generation, allocation or repetitions. */
     original = malloc((size_t)n * sizeof *original);
     copy = malloc((size_t)n * sizeof *copy);
     scratch = malloc((size_t)n * sizeof *scratch);
     if (!original || !copy || !scratch) {
         fputs("Echec d'allocation des tableaux.\n", stderr); goto fin;
-    }
-    for (int a = 0; a < NOMBRE_ALGORITHMES; ++a) {
-        result->effectue[a] = algorithme_eligible((Algorithme)a, c, n, p->limite_lente);
-        result->minimum[a] = DBL_MAX;
-        if (progress && !result->effectue[a] && c < QUICK_EQUILIBRE)
-            printf("  %s : non_mesure (limite %d)\n", nom_algorithme((Algorithme)a), p->limite_lente);
     }
     for (int r = 0; r < p->repetitions; ++r) {
         uint32_t input_seed = graine_experience(seed, c, n, r, 0);
@@ -329,12 +351,13 @@ int executer_experience(int n, Configuration c, const Parametres *p, uint32_t se
                 fflush(stdout);
             }
             memcpy(copy, original, (size_t)n * sizeof *copy);
-            srand((unsigned)pivot_seed);
+            initialiser_pivots(pivot_seed);
             if (!QueryPerformanceCounter(&start)) goto timer_error;
             appliquer_tri((Algorithme)a, copy, scratch, n, c == QUICK_EQUILIBRE);
             if (!QueryPerformanceCounter(&finish)) goto timer_error;
             if (!tableau_est_trie(copy, n)) goto sort_error;
             double seconds = (double)(finish.QuadPart - start.QuadPart) / (double)frequency.QuadPart;
+            if (seconds < 0) goto timer_error;
             if (seconds < result->minimum[a]) result->minimum[a] = seconds;
             result->moyenne[a] += seconds / p->repetitions;
             if (fprintf(mesures, "%s;%d;%d;%s;%u;%u;%.12f\n", fichier_configuration(c), n,
@@ -343,7 +366,7 @@ int executer_experience(int n, Configuration c, const Parametres *p, uint32_t se
             if (r == 0) {
                 if (progress) { puts("    Comptage separe (hors chronometrage)..."); fflush(stdout); }
                 memcpy(copy, original, (size_t)n * sizeof *copy);
-                srand((unsigned)pivot_seed);
+                initialiser_pivots(pivot_seed);
                 result->operations[a] = compter_tri((Algorithme)a, copy, scratch, n, c == QUICK_EQUILIBRE);
                 if (!tableau_est_trie(copy, n)) goto sort_error;
             }

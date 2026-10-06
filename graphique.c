@@ -1,12 +1,15 @@
 #include "graphique.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <inttypes.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <windows.h>
+#include <shellapi.h>
 
 static int chemin(char *out, size_t size, const char *format, ...)
 {
@@ -81,9 +84,25 @@ int creer_dossier_experience(DossierExperience *d, const Parametres *p, uint32_t
                "Mouvements : ecritures de tableaux, tampon fusion inclus; un swap vaut 3.\n"
                "Generation/copies/verification exclues des temps et compteurs.\n"
                "Entrees : xorshift32, valeurs aleatoires de 0 a 1000000.\n"
-               "Pivots : srand(graine_pivot), rand() du GCC utilise pour compiler.\n"
+               "Pivots : xorshift32-rejet-v1, etat separe; meme graine avant temps et comptage.\n"
+               "Minimum chronometre : minimum des repetitions, pas meilleur cas theorique.\n"
                "Graines de chaque repetition dans mesures.csv; algorithme de derivation dans tri.c.\n"
                "non_mesure : test ignore au-dela de la limite lente.\n");
+    SYSTEM_INFO machine;
+    LARGE_INTEGER frequency;
+    GetSystemInfo(&machine);
+    const char *cpu = getenv("PROCESSOR_IDENTIFIER");
+    fprintf(f, "Compilateur : GCC %s\nOptimisation : %s\nCPU : %s\nProcesseurs logiques : %lu\n",
+            __VERSION__,
+#ifdef __OPTIMIZE__
+            "active (__OPTIMIZE__); build de livraison avec -O2",
+#else
+            "inactive",
+#endif
+            cpu ? cpu : "identifiant indisponible", (unsigned long)machine.dwNumberOfProcessors);
+    if (QueryPerformanceFrequency(&frequency) && frequency.QuadPart > 0)
+        fprintf(f, "Frequence du chronometre QPC : %lld Hz\n", (long long)frequency.QuadPart);
+    else fputs("Frequence du chronometre QPC : indisponible\n", f);
     return fermer_sortie(f);
 }
 
@@ -263,9 +282,9 @@ static int analyser_donnees(const char *path, int csv, int count, int small, int
     return ok;
 }
 
-static int creer_script(const DossierExperience *d, const char *data_relative,
+static int creer_script_selection(const DossierExperience *d, const char *data_relative,
                         const char *graph_relative, const char *title, int csv,
-                        int count, const char *const *labels, int first, int small,
+                        int count, const char *const *labels, unsigned selection, int small,
                         char *script_path)
 {
     char data[LONGUEUR_CHEMIN], png[LONGUEUR_CHEMIN];
@@ -276,7 +295,7 @@ static int creer_script(const DossierExperience *d, const char *data_relative,
     int available[NOMBRE_ALGORITHMES];
     if (!analyser_donnees(data, csv, count, small, available)) return -1;
     int series = 0;
-    for (int i = first; i < count; ++i) series += available[i];
+    for (int i = 0; i < count; ++i) if (selection & (1u << i)) series += available[i];
     if (!series) return 0;
     FILE *f = fopen(script_path, "w");
     if (!f) return -1;
@@ -287,13 +306,23 @@ static int creer_script(const DossierExperience *d, const char *data_relative,
     if (small) fputs("set xrange [0:5000]\n", f);
     fputs("plot ", f);
     int printed = 0;
-    for (int i = first; i < count; ++i) {
-        if (!available[i]) continue;
+    const char *colors[] = {"#d62728", "#ff7f0e", "#9467bd", "#1f77b4", "#2ca02c", "#8c564b"};
+    for (int i = 0; i < count; ++i) {
+        if (!(selection & (1u << i)) || !available[i]) continue;
         if (printed++) fputs(", ", f);
-        fprintf(f, "'%s' %susing 1:%d title '%s' with linespoints", data, csv ? "every ::1 " : "", csv ? 2 + 2 * i : 2 + i, labels[i]);
+        fprintf(f, "'%s' %susing 1:%d title '%s' with linespoints lc rgb '%s'", data, csv ? "every ::1 " : "", csv ? 2 + 2 * i : 2 + i, labels[i], colors[i]);
     }
     fputs("\nunset output\n", f);
     return fermer_sortie(f) ? 1 : -1;
+}
+static int creer_script(const DossierExperience *d, const char *data_relative,
+                        const char *graph_relative, const char *title, int csv,
+                        int count, const char *const *labels, int first, int small,
+                        char *script_path)
+{
+    unsigned selection = ((1u << count) - 1u) & ~((1u << first) - 1u);
+    return creer_script_selection(d, data_relative, graph_relative, title, csv,
+                                  count, labels, selection, small, script_path);
 }
 
 /* Launch without cmd.exe: quoted installation paths and no visible helper window. */
@@ -340,6 +369,7 @@ int generer_graphiques(const DossierExperience *d)
         char data[128];
         snprintf(data, sizeof data, "%s.csv", fichier_configuration((Configuration)c));
         for (int view = 0; view < 3; ++view) {
+            if (c == ALEATOIRE && view == 0) continue; /* Global comparison is authoritative. */
             const char *suffix = view == 1 ? "_rapides" : view == 2 ? "_petites_tailles" : "";
             snprintf(relative, sizeof relative, "configurations/%s%s", fichier_configuration((Configuration)c), suffix);
             snprintf(title, sizeof title, "Comparaison - %s%s", nom_configuration((Configuration)c), view == 1 ? " - rapide, fusion et tas" : view == 2 ? " - tailles jusqu a 5000" : "");
@@ -348,7 +378,6 @@ int generer_graphiques(const DossierExperience *d)
             count += result;
         }
     }
-    if (!count) { puts("Aucune donnee disponible pour les graphiques."); return 0; }
     char exe[LONGUEUR_CHEMIN];
     if (!trouver_gnuplot(exe, sizeof exe)) {
         puts("Gnuplot introuvable. Mesures et scripts .plt conserves; regeneration disponible au menu.");
@@ -358,6 +387,441 @@ int generer_graphiques(const DossierExperience *d)
     for (int i = 0; i < count; ++i) if (!executer_gnuplot(exe, scripts[i])) {
         fprintf(stderr, "Echec de Gnuplot : %s. Script conserve.\n", scripts[i]); ok = 0;
     }
+    const char *folders[] = {"histogrammes", "comparaisons"};
+    for (int folder = 0; folder < 2; ++folder) {
+        char pattern[LONGUEUR_CHEMIN], script[LONGUEUR_CHEMIN];
+        if (!chemin(pattern, sizeof pattern, "%s/%s/*.plt", d->graphiques, folders[folder])) return 0;
+        WIN32_FIND_DATAA found;
+        HANDLE search = FindFirstFileA(pattern, &found);
+        if (search != INVALID_HANDLE_VALUE) {
+            do {
+                if (found.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+                if (!chemin(script, sizeof script, "%s/%s/%s", d->graphiques, folders[folder], found.cFileName) ||
+                    !executer_gnuplot(exe, script)) {
+                    ok = 0; fprintf(stderr, "Echec de regeneration : %s\n", found.cFileName);
+                }
+                ++count;
+            } while (FindNextFileA(search, &found));
+            FindClose(search);
+        }
+    }
+    if (!count) { puts("Aucune donnee disponible pour les graphiques."); return 0; }
     if (ok) printf("%d graphiques PNG crees dans %s.\n", count, d->graphiques);
     return ok;
+}
+
+/* Strictly read the unchanged summary format. Reject partial, duplicated or
+   invalid records rather than drawing an apparently valid histogram. */
+static int charger_resume(const DossierExperience *d, LigneResultat *rows, int *count)
+{
+    char path[LONGUEUR_CHEMIN], line[1024];
+    int seen[NOMBRE_CAS * NOMBRE_TAILLES][NOMBRE_ALGORITHMES] = {{0}};
+    *count = 0;
+    if (!chemin(path, sizeof path, "%s/resume.csv", d->resultats)) return 0;
+    FILE *f = fopen(path, "r");
+    if (!f) { fprintf(stderr, "Resume introuvable : %s\n", path); return 0; }
+    int ok = fgets(line, sizeof line, f) &&
+        strcmp(line, "configuration;taille;algorithme;statut;minimum_s;moyenne_s\n") == 0;
+    while (ok && fgets(line, sizeof line, f)) {
+        if (!strchr(line, '\n') && !feof(f)) { ok = 0; break; }
+        line[strcspn(line, "\r\n")] = 0;
+        char *fields[6], *part = line;
+        for (int i = 0; i < 6; ++i) {
+            fields[i] = part;
+            char *sep = strchr(part, ';');
+            if ((i < 5 && !sep) || (i == 5 && sep)) { ok = 0; break; }
+            if (sep) { *sep = 0; part = sep + 1; }
+            if (!fields[i][0]) { ok = 0; break; }
+        }
+        if (!ok) break;
+        int c = -1, a = -1, n = 0;
+        for (int i = 0; i < NOMBRE_CAS; ++i)
+            if (!strcmp(fields[0], fichier_configuration((Configuration)i))) c = i;
+        for (int i = 0; i < NOMBRE_ALGORITHMES; ++i)
+            if (!strcmp(fields[2], fichier_algorithme((Algorithme)i))) a = i;
+        char *end;
+        errno = 0;
+        long size = strtol(fields[1], &end, 10);
+        if (!errno && !*end)
+            for (int i = 0; i < NOMBRE_TAILLES; ++i) if (size == TAILLES[i]) n = (int)size;
+        if (c < 0 || a < 0 || !n || (c >= QUICK_EQUILIBRE && a != RAPIDE)) { ok = 0; break; }
+        int r;
+        for (r = 0; r < *count; ++r) if (rows[r].configuration == (Configuration)c && rows[r].taille == n) break;
+        if (r == *count) {
+            if (*count == NOMBRE_CAS * NOMBRE_TAILLES) { ok = 0; break; }
+            memset(&rows[r], 0, sizeof rows[r]);
+            rows[r].configuration = (Configuration)c; rows[r].taille = n;
+            ++*count;
+        }
+        if (seen[r][a]++) { ok = 0; break; }
+        if (!strcmp(fields[3], "non_mesure")) {
+            if (strcmp(fields[4], "non_mesure") || strcmp(fields[5], "non_mesure")) ok = 0;
+        } else if (!strcmp(fields[3], "mesure")) {
+            double values[2];
+            for (int i = 0; i < 2; ++i) {
+                errno = 0;
+                values[i] = strtod(fields[4 + i], &end);
+                if (errno || *end || !isfinite(values[i]) || values[i] < 0) ok = 0;
+            }
+            if (!ok || values[0] > values[1] + 1e-12) { ok = 0; break; }
+            rows[r].resultat.effectue[a] = 1;
+            rows[r].resultat.minimum[a] = values[0];
+            rows[r].resultat.moyenne[a] = values[1];
+        } else ok = 0;
+    }
+    if (ferror(f) || !*count) ok = 0;
+    fclose(f);
+    for (int r = 0; ok && r < *count; ++r) {
+        for (int a = 0; a < NOMBRE_ALGORITHMES; ++a)
+            if ((rows[r].configuration < QUICK_EQUILIBRE || a == RAPIDE) && !seen[r][a]) ok = 0;
+        if (rows[r].configuration >= QUICK_EQUILIBRE)
+            for (int c = QUICK_EQUILIBRE; c <= QUICK_EGAUX; ++c)
+                if (!trouver(rows, *count, rows[r].taille, (Configuration)c)) ok = 0;
+    }
+    if (!ok) fprintf(stderr, "Resume vide, incomplet ou malforme : %s\n", path);
+    return ok;
+}
+
+static int ecrire_histogramme(const DossierExperience *d, const char *base,
+                             const char *title, int count, const char *const *labels,
+                             const int *measured, const double *minimum, const double *average,
+                             char *script, char *png)
+{
+    char data[LONGUEUR_CHEMIN];
+    if (!chemin(data, sizeof data, "%s/histogrammes/%s.dat", d->graphiques, base) ||
+        !chemin(script, LONGUEUR_CHEMIN, "%s/histogrammes/%s.plt", d->graphiques, base) ||
+        !chemin(png, LONGUEUR_CHEMIN, "%s/histogrammes/%s.png", d->graphiques, base)) return 0;
+    FILE *f = fopen(data, "w");
+    if (!f) { perror(data); return 0; }
+    fputs("categorie;minimum_s;moyenne_s\n", f);
+    double maximum = 0;
+    for (int i = 0; i < count; ++i) {
+        if (measured[i]) {
+            fprintf(f, "%s;%.12f;%.12f\n", labels[i], minimum[i], average[i]);
+            if (average[i] > maximum) maximum = average[i];
+        } else fprintf(f, "%s (non mesure);non_mesure;non_mesure\n", labels[i]);
+    }
+    if (!fermer_sortie(f)) return 0;
+    f = fopen(script, "w");
+    if (!f) { perror(script); return 0; }
+    fprintf(f, "set encoding utf8\nset terminal pngcairo size 1400,900 font 'Arial,12'\n"
+               "set output '%s'\nset datafile separator ';'\nset datafile missing 'non_mesure'\n"
+               "set title '%s'\nset ylabel 'Temps de tri (secondes)'\n"
+               "set style data histograms\nset style histogram clustered gap 1\n"
+               "set style fill solid 0.85 border -1\nset boxwidth 0.85\n"
+               "set grid ytics\nset key outside top center horizontal\n"
+               "set xtics rotate by -15\nset bmargin 7\nset yrange [0:%.12g]\n",
+            png, title, maximum > 0 ? maximum * 1.55 : 1.0);
+    fputs("set label 1 'Minimum des repetitions et moyenne arithmetique; aucune nouvelle mesure.' at graph 0.01,0.97 front\n", f);
+    int skipped = 0;
+    for (int i = 0; i < count; ++i) if (!measured[i]) {
+        fprintf(f, "set label %d 'Non mesure : %s (limite lente)' at graph 0.01,%.3f front\n",
+                2 + skipped, labels[i], 0.91 - skipped * 0.045);
+        ++skipped;
+    }
+    fprintf(f, "plot '%s' every ::1 using 2:xticlabels(1) title 'Minimum (s)' lc rgb '#1f77b4', "
+               "'' every ::1 using 3 title 'Moyenne (s)' lc rgb '#ff7f0e', "
+               "'' every ::1 using ($0-0.17):2:(sprintf('%%.6g s',column(2))) with labels rotate by 90 left offset 0,1 notitle, "
+               "'' every ::1 using ($0+0.17):3:(sprintf('%%.6g s',column(3))) with labels rotate by 90 left offset 0,1 notitle\n"
+               "unset output\n", data);
+    return fermer_sortie(f);
+}
+
+static int ouvrir_png(const char *png)
+{
+    char absolute[LONGUEUR_CHEMIN];
+    DWORD n = GetFullPathNameA(png, sizeof absolute, absolute, NULL);
+    if (!n || n >= sizeof absolute || !fichier_existe(absolute)) return 0;
+    return (INT_PTR)ShellExecuteA(NULL, "open", absolute, NULL, NULL, SW_SHOWNORMAL) > 32;
+}
+
+/* Reuse saved PNGs, including when Gnuplot is unavailable. Only missing images
+   need rendering; the saved measurements are never rewritten. */
+static int montrer_courbe(const DossierExperience *d, const char *data,
+                          const char *relative, const char *title, int csv,
+                          int count, const char *const *labels, unsigned selection, int small)
+{
+    char png[LONGUEUR_CHEMIN], script[LONGUEUR_CHEMIN], folder[LONGUEUR_CHEMIN];
+    if (!chemin(png, sizeof png, "%s/%s.png", d->graphiques, relative) ||
+        !chemin(script, sizeof script, "%s/%s.plt", d->graphiques, relative)) return 0;
+    printf("Courbe : %s\n", png);
+    puts("Temps minimum en secondes. Les tests non mesures n'ont aucun point, jamais zero.");
+    if (!fichier_existe(png)) {
+        if (!chemin(folder, sizeof folder, "%s/%s", d->graphiques, relative)) return 0;
+        char *slash = strrchr(folder, '/');
+        if (!slash) return 0;
+        *slash = 0;
+        if (!assurer_dossier(d->graphiques) || !assurer_dossier(folder)) {
+            fprintf(stderr, "Impossible de creer le dossier : %s\n", folder); return 0;
+        }
+        int result = creer_script_selection(d, data, relative, title, csv, count,
+                                            labels, selection, small, script);
+        if (result <= 0) {
+            fprintf(stderr, "Donnees absentes, illisibles ou sans mesure pour cette vue : %s/%s\n",
+                    d->resultats, data); return 0;
+        }
+        char exe[LONGUEUR_CHEMIN];
+        printf("Script : %s\n", script);
+        if (!trouver_gnuplot(exe, sizeof exe)) {
+            puts("Gnuplot introuvable. Script conserve; utiliser Courbes > Regenerer les graphiques.");
+            return 0;
+        }
+        if (!executer_gnuplot(exe, script) || !fichier_existe(png)) {
+            fprintf(stderr, "Echec de creation du PNG. Script conserve : %s\n", script); return 0;
+        }
+    }
+    if (!ouvrir_png(png)) printf("Visionneuse indisponible. Ouvrir manuellement : %s\n", png);
+    return 1;
+}
+
+static int mesure_presente(const LigneResultat *rows, int count, int c, int a)
+{
+    for (int i = 0; i < count; ++i)
+        if (rows[i].configuration < QUICK_EQUILIBRE &&
+            (c < 0 || rows[i].configuration == (Configuration)c) &&
+            rows[i].resultat.effectue[a]) return 1;
+    return 0;
+}
+
+/* Returns a configuration, NOMBRE_CONFIGURATIONS for all cases, or -1 to cancel. */
+static int choisir_configuration_courbe(const LigneResultat *rows, int count, int a,
+                                       int (*read_int)(const char *, int, int))
+{
+    int choices[NOMBRE_CONFIGURATIONS + 1], total = 0;
+    for (int c = 0; c < NOMBRE_CONFIGURATIONS; ++c)
+        if (configuration_presente(rows, count, (Configuration)c) &&
+            (a < 0 || mesure_presente(rows, count, c, a))) {
+            choices[total++] = c;
+            printf("%d. %s\n", total, nom_configuration((Configuration)c));
+        }
+    if (a >= 0 && total) {
+        choices[total++] = NOMBRE_CONFIGURATIONS;
+        printf("%d. Toutes les configurations\n", total);
+    }
+    if (!total) { puts("Aucune configuration mesuree disponible pour ce choix."); return -1; }
+    puts("0. Retour");
+    int choice = read_int("Configuration : ", 0, total);
+    return choice <= 0 ? -1 : choices[choice - 1];
+}
+
+static unsigned choisir_algorithmes_courbe(int number, int (*read_int)(const char *, int, int))
+{
+    unsigned selection = 0;
+    for (int a = 0; a < NOMBRE_ALGORITHMES; ++a) printf("%d. %s\n", a + 1, nom_algorithme((Algorithme)a));
+    puts("0. Retour");
+    for (int selected = 0; selected < number;) {
+        printf("Algorithme %d/%d :\n", selected + 1, number);
+        int choice = read_int("Votre choix : ", 0, NOMBRE_ALGORITHMES);
+        if (choice <= 0) return 0;
+        unsigned bit = 1u << (choice - 1);
+        if (selection & bit) { puts("Algorithme deja choisi. Choisissez-en un autre."); continue; }
+        selection |= bit;
+        ++selected;
+    }
+    return selection;
+}
+
+static int montrer_selection(const DossierExperience *d, int c, int a, unsigned selection, int small)
+{
+    char data[128], relative[128], title[256];
+    const char *labels[NOMBRE_ALGORITHMES];
+    int csv = 0, count;
+    if (c == NOMBRE_CONFIGURATIONS && a >= 0) {
+        const char *cases[] = {"Tableau trie", "Tableau aleatoire", "Tableau inverse", "Tableau presque trie", "Dix valeurs repetees"};
+        count = NOMBRE_CONFIGURATIONS;
+        for (int i = 0; i < count; ++i) labels[i] = cases[i];
+        selection = (1u << count) - 1u;
+        snprintf(data, sizeof data, "cases/%s_cases.dat", fichier_algorithme((Algorithme)a));
+        snprintf(relative, sizeof relative, "cases/%s_cases", fichier_algorithme((Algorithme)a));
+        snprintf(title, sizeof title, "%s - Comparaison des configurations", nom_algorithme((Algorithme)a));
+    } else if (c == QUICK_EQUILIBRE) {
+        count = 3; selection = 7u;
+        labels[0] = "Partitions equilibrees (pivot milieu)";
+        labels[1] = "Tableau aleatoire (pivot aleatoire)";
+        labels[2] = "Toutes les valeurs egales (pivot aleatoire)";
+        snprintf(data, sizeof data, "cases/quick_sort_best_avg_worst_cases.dat");
+        snprintf(relative, sizeof relative, "cases/quick_sort_best_avg_worst_cases");
+        snprintf(title, sizeof title, "Tri rapide - Partitions equilibrees, aleatoire et valeurs egales");
+    } else {
+        csv = 1; count = NOMBRE_ALGORITHMES;
+        for (int i = 0; i < count; ++i) labels[i] = nom_algorithme((Algorithme)i);
+        snprintf(data, sizeof data, "%s.csv", fichier_configuration((Configuration)c));
+        snprintf(title, sizeof title, "Comparaison - %s%s", nom_configuration((Configuration)c),
+                 small ? " - tailles jusqu a 5000" : "");
+        if (selection == (1u << NOMBRE_ALGORITHMES) - 1u) {
+            if (c == ALEATOIRE && !small) {
+                csv = 0;
+                snprintf(data, sizeof data, "benchmark/res.dat");
+                snprintf(relative, sizeof relative, "algorithm_benchmark/algorithm_benchmark");
+                snprintf(title, sizeof title, "Sorting Algorithm Performance");
+            } else snprintf(relative, sizeof relative, "configurations/%s%s",
+                            fichier_configuration((Configuration)c), small ? "_petites_tailles" : "");
+        } else snprintf(relative, sizeof relative, "comparaisons/%s_algos_%02x%s",
+                        fichier_configuration((Configuration)c), selection, small ? "_petites_tailles" : "");
+    }
+    return montrer_courbe(d, data, relative, title, csv, count, labels, selection, small);
+}
+
+int afficher_courbes(const DossierExperience *d, int (*read_int)(const char *, int, int))
+{
+    for (;;) {
+        printf("\n===== Courbes du dernier run : %s =====\n", d->identifiant);
+        puts("1. Un algorithme");
+        puts("2. Tous les algorithmes");
+        puts("3. Comparer deux algorithmes");
+        puts("4. Comparer plusieurs algorithmes");
+        puts("5. Experience du tri rapide");
+        puts("6. Regenerer les graphiques");
+        puts("0. Retour");
+        int choice = read_int("Votre choix : ", 0, 6);
+        if (choice <= 0) return 1;
+        if (choice == 6) { generer_graphiques(d); continue; }
+        LigneResultat rows[NOMBRE_CAS * NOMBRE_TAILLES];
+        int count;
+        if (!charger_resume(d, rows, &count)) continue;
+        if (choice == 5) {
+            if (!configuration_presente(rows, count, QUICK_EQUILIBRE)) {
+                puts("Experience du tri rapide absente de ce run."); continue;
+            }
+            montrer_selection(d, QUICK_EQUILIBRE, -1, 1u << RAPIDE, 0);
+            continue;
+        }
+        int a = -1;
+        unsigned selection = (1u << NOMBRE_ALGORITHMES) - 1u;
+        if (choice == 1) {
+            selection = choisir_algorithmes_courbe(1, read_int);
+            if (!selection) continue;
+            for (a = 0; !(selection & (1u << a)); ++a) {}
+        }
+        int c = choisir_configuration_courbe(rows, count, a, read_int);
+        if (c < 0) continue;
+        if (choice == 3 || choice == 4) {
+            int number = 2;
+            if (choice == 4) {
+                do {
+                    number = read_int("Nombre d'algorithmes (3 a 6, 0 pour retour) : ", 0, NOMBRE_ALGORITHMES);
+                    if (number <= 0) break;
+                    if (number < 3) puts("Choisissez entre 3 et 6 algorithmes.");
+                } while (number > 0 && number < 3);
+                if (number <= 0) continue;
+            }
+            selection = choisir_algorithmes_courbe(number, read_int);
+            if (!selection) continue;
+        }
+        int small = 0;
+        if (c < NOMBRE_CONFIGURATIONS) {
+            puts("1. Toutes les tailles disponibles");
+            puts("2. Tailles jusqu'a 5000");
+            puts("0. Retour");
+            int view = read_int("Vue : ", 0, 2);
+            if (view <= 0) continue;
+            small = view == 2;
+            for (int algorithm = 0; algorithm < NOMBRE_ALGORITHMES; ++algorithm) {
+                if (!(selection & (1u << algorithm))) continue;
+                int skipped = 0;
+                for (int i = 0; i < count; ++i)
+                    if (rows[i].configuration == (Configuration)c && (!small || rows[i].taille <= 5000) &&
+                        !rows[i].resultat.effectue[algorithm]) {
+                        if (!skipped++) printf("%s : non_mesure aux tailles", nom_algorithme((Algorithme)algorithm));
+                        printf(" %d", rows[i].taille);
+                    }
+                if (skipped) putchar('\n');
+            }
+        }
+        montrer_selection(d, c, a, selection, small);
+    }
+}
+
+int generer_histogramme(const DossierExperience *d, Configuration configuration, int n, int open_image)
+{
+    LigneResultat rows[NOMBRE_CAS * NOMBRE_TAILLES];
+    int total;
+    if (!charger_resume(d, rows, &total)) return 0;
+    if (configuration < ALEATOIRE || configuration >= NOMBRE_CAS) return 0;
+    int special = configuration >= QUICK_EQUILIBRE;
+    int count = special ? 3 : NOMBRE_ALGORITHMES;
+    const char *labels[NOMBRE_ALGORITHMES];
+    const char *quick[] = {"Partitions equilibrees (pivot milieu)",
+                          "Entree aleatoire (pivot aleatoire)", "Toutes egales (pivot aleatoire)"};
+    int measured[NOMBRE_ALGORITHMES] = {0};
+    double minimum[NOMBRE_ALGORITHMES] = {0}, average[NOMBRE_ALGORITHMES] = {0};
+    for (int i = 0; i < count; ++i) {
+        const LigneResultat *r = trouver(rows, total, n, special ? (Configuration)(QUICK_EQUILIBRE + i) : configuration);
+        if (!r) { puts("Configuration ou taille absente du resume."); return 0; }
+        int a = special ? RAPIDE : i;
+        labels[i] = special ? quick[i] : nom_algorithme((Algorithme)a);
+        measured[i] = r->resultat.effectue[a];
+        minimum[i] = r->resultat.minimum[a]; average[i] = r->resultat.moyenne[a];
+    }
+    char folder[LONGUEUR_CHEMIN], base[128], title[256];
+    char scripts[2][LONGUEUR_CHEMIN], png[2][LONGUEUR_CHEMIN];
+    if (!assurer_dossier(d->graphiques) ||
+        !chemin(folder, sizeof folder, "%s/histogrammes", d->graphiques) || !assurer_dossier(folder)) return 0;
+    snprintf(base, sizeof base, "%s_%d", special ? "experience_rapide" : fichier_configuration(configuration), n);
+    snprintf(title, sizeof title, "%s - N=%d - run %s",
+             special ? "Experience tri rapide : strategies de pivot indiquees" : nom_configuration(configuration), n, d->identifiant);
+    if (!ecrire_histogramme(d, base, title, count, labels, measured, minimum, average, scripts[0], png[0])) return 0;
+    int views = 1;
+    double slow = 0, fast = 0;
+    if (!special) {
+        for (int i = 0; i < count; ++i) if (measured[i]) {
+            if (i < RAPIDE && average[i] > slow) slow = average[i];
+            if (i >= RAPIDE && average[i] > fast) fast = average[i];
+        }
+        if (fast > 0 && slow > 5 * fast) {
+            size_t used = strlen(base);
+            snprintf(base + used, sizeof base - used, "_rapides");
+            size_t length = strlen(title);
+            snprintf(title + length, sizeof title - length, " - rapide, fusion et tas");
+            if (!ecrire_histogramme(d, base, title, 3, labels + RAPIDE, measured + RAPIDE,
+                                   minimum + RAPIDE, average + RAPIDE, scripts[1], png[1])) return 0;
+            views = 2;
+        }
+    }
+    char exe[LONGUEUR_CHEMIN];
+    int ok = trouver_gnuplot(exe, sizeof exe);
+    if (!ok) puts("Gnuplot introuvable : donnees et scripts conserves. Utiliser ensuite l'option 5.");
+    for (int i = 0; i < views; ++i) {
+        if (ok && !executer_gnuplot(exe, scripts[i])) {
+            fprintf(stderr, "Echec de Gnuplot : %s\n", scripts[i]); ok = 0;
+        }
+        printf("Histogramme : %s\nScript : %s\n", png[i], scripts[i]);
+    }
+    /* Print actual data paths (same basename as each script). */
+    for (int i = 0; i < views; ++i) {
+        char data[LONGUEUR_CHEMIN];
+        snprintf(data, sizeof data, "%s", scripts[i]);
+        char *suffix = strrchr(data, '.');
+        if (suffix) strcpy(suffix, ".dat");
+        printf("Fichier de donnees : %s\n", data);
+    }
+    if (ok && open_image && !ouvrir_png(png[0]))
+        printf("Visionneuse indisponible. Ouvrir manuellement : %s\n", png[0]);
+    return ok;
+}
+
+int afficher_histogramme(const DossierExperience *d, int (*read_int)(const char *, int, int))
+{
+    LigneResultat rows[NOMBRE_CAS * NOMBRE_TAILLES];
+    int count, choices[NOMBRE_CONFIGURATIONS + 1], total = 0;
+    if (!charger_resume(d, rows, &count)) return 0;
+    printf("Histogramme du dernier run complet : %s (mesures enregistrees)\n", d->identifiant);
+    for (int c = 0; c <= NOMBRE_CONFIGURATIONS; ++c) {
+        Configuration config = c == NOMBRE_CONFIGURATIONS ? QUICK_EQUILIBRE : (Configuration)c;
+        if (configuration_presente(rows, count, config)) {
+            choices[total++] = config;
+            printf("%d. %s\n", total, c == NOMBRE_CONFIGURATIONS ? "Experience tri rapide (les trois cas)" : nom_configuration(config));
+        }
+    }
+    int choice = read_int("Configuration : ", 1, total);
+    if (choice < 0) return 0;
+    Configuration config = (Configuration)choices[choice - 1];
+    int sizes[NOMBRE_TAILLES], available = 0;
+    for (int s = 0; s < NOMBRE_TAILLES; ++s) if (trouver(rows, count, TAILLES[s], config)) {
+        sizes[available++] = TAILLES[s];
+        printf("%d. %d elements\n", available, TAILLES[s]);
+    }
+    choice = read_int("Taille de l'histogramme : ", 1, available);
+    if (choice < 0) return 0;
+    return generer_histogramme(d, config, sizes[choice - 1], 1);
 }

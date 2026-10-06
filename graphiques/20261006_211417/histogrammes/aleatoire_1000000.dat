@@ -1,0 +1,7 @@
+categorie;minimum_s;moyenne_s
+Tri par selection (non mesure);non_mesure;non_mesure
+Tri a bulles (non mesure);non_mesure;non_mesure
+Tri par insertion (non mesure);non_mesure;non_mesure
+Tri rapide;0.234838800000;0.241659745000
+Tri fusion;0.248489900000;0.255272620000
+Tri par tas;0.333937000000;0.343846565000

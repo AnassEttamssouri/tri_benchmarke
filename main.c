@@ -42,9 +42,16 @@ static void afficher_complexites(void)
     puts("Selection                 : O(n^2) / O(n^2) / O(n^2)");
     puts("Insertion                 : O(n) / O(n^2) / O(n^2)");
     puts("Rapide, pivot aleatoire   : O(n log n) / O(n log n) / O(n^2)");
-    puts("Fusion et tas             : O(n log n) dans les trois cas (borne superieure).");
+    puts("Fusion                    : Theta(n log n) dans les trois cas ici.");
+    puts("Tas                       : O(n log n); cas moyen/pire Theta(n log n).");
+    puts("Tas : toutes valeurs egales donnent Theta(n) avec cette implementation.");
     puts("Partition rapide en deux groupes : les doublons peuvent provoquer O(n^2).");
     puts("Valeurs theoriques; les mesures en secondes et les compteurs sont reels.");
+    puts("Minimum chronometre != meilleur cas theorique d'entree.");
+    puts("Compteurs : un passage representatif, pas une moyenne; un swap = 3 mouvements.");
+    puts("Reference : Sedgewick et Wayne, Algorithms, 4e edition :");
+    puts("https://algs4.cs.princeton.edu/cheatsheet/");
+    puts("https://algs4.cs.princeton.edu/23quicksort/ (hypotheses et partition differentes).");
 }
 static void afficher_resultat(const LigneResultat *row)
 {
@@ -132,14 +139,15 @@ int main(void)
     setlocale(LC_ALL, ""); setlocale(LC_NUMERIC, "C");
     for (;;) {
         puts("\n===== Etude comparative des algorithmes de tri =====");
-        puts("1. Lancer tous les tests");
-        puts("2. Tester une configuration jusqu'a une taille maximale");
-        printf("3. Regler les tests (repetitions %d, limite lente %d, taille max %d)\n", p.repetitions, p.limite_lente, p.taille_max);
-        puts("4. Afficher les complexites theoriques");
-        puts("5. Regenerer les graphiques du dernier test");
-        puts("6. Quitter");
-        int choice = lire_entier("Votre choix : ", 1, 6);
-        if (choice < 0 || choice == 6) { puts("Au revoir."); break; }
+        puts("1. Tous les tests");
+        puts("2. Test au choix");
+        printf("3. Parametres (repetitions %d, limite lente %d, taille max %d)\n", p.repetitions, p.limite_lente, p.taille_max);
+        puts("4. Complexites theoriques");
+        puts("5. Afficher les courbes");
+        puts("6. Afficher un histogramme");
+        puts("7. Quitter");
+        int choice = lire_entier("Votre choix : ", 1, 7);
+        if (choice < 0 || choice == 7) { puts("Au revoir."); break; }
         switch (choice) {
         case 1: lancer_tests(&p, -1); break;
         case 2: choisir_test(&p); break;
@@ -147,7 +155,13 @@ int main(void)
         case 4: afficher_complexites(); break;
         case 5: {
             DossierExperience d;
-            if (charger_dernier_dossier(&d)) generer_graphiques(&d);
+            if (charger_dernier_dossier(&d)) afficher_courbes(&d, lire_entier);
+            else puts("Aucun dernier test disponible.");
+            break;
+        }
+        case 6: {
+            DossierExperience d;
+            if (charger_dernier_dossier(&d)) afficher_histogramme(&d, lire_entier);
             else puts("Aucun dernier test disponible.");
             break;
         }

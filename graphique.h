@@ -24,5 +24,11 @@ int enregistrer_resultats(const DossierExperience *dossier,
 int enregistrer_dernier_dossier(const DossierExperience *dossier);
 int charger_dernier_dossier(DossierExperience *dossier);
 int generer_graphiques(const DossierExperience *dossier);
+int afficher_courbes(const DossierExperience *dossier,
+                    int (*lire_entier)(const char *, int, int));
+int generer_histogramme(const DossierExperience *dossier, Configuration configuration,
+                       int taille, int ouvrir_image);
+int afficher_histogramme(const DossierExperience *dossier,
+                        int (*lire_entier)(const char *, int, int));
 
 #endif

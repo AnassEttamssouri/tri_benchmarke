@@ -37,6 +37,7 @@ const char *fichier_configuration(Configuration configuration);
 int algorithme_eligible(Algorithme algorithme, Configuration configuration,
                        int taille, int limite);
 uint32_t nombre_aleatoire(uint32_t *etat);
+void initialiser_pivots(uint32_t graine);
 uint32_t graine_experience(uint32_t graine, Configuration configuration,
                           int taille, int repetition, int pivot);
 int generer_tableau(int *tableau, int taille, Configuration configuration,

@@ -1,0 +1,23 @@
+Application : tri_benchmark
+Identifiant : 20261006_211417
+Graine : 1791321257
+Repetitions : 20
+Limite lente : 20000
+Taille maximale : 1000000
+Choix : -1
+Tailles : 100 500 1000 5000 10000 20000 50000 100000 500000 1000000
+Temps : secondes; minimum et moyenne arithmetique.
+Compteurs : un passage separe sur la repetition 1 (pas une moyenne).
+Comparaisons : valeurs entre elles ou valeur/pivot.
+Mouvements : ecritures de tableaux, tampon fusion inclus; un swap vaut 3.
+Generation/copies/verification exclues des temps et compteurs.
+Entrees : xorshift32, valeurs aleatoires de 0 a 1000000.
+Pivots : xorshift32-rejet-v1, etat separe; meme graine avant temps et comptage.
+Minimum chronometre : minimum des repetitions, pas meilleur cas theorique.
+Graines de chaque repetition dans mesures.csv; algorithme de derivation dans tri.c.
+non_mesure : test ignore au-dela de la limite lente.
+Compilateur : GCC 10.3.0
+Optimisation : active (__OPTIMIZE__); build de livraison avec -O2
+CPU : Intel64 Family 6 Model 78 Stepping 3, GenuineIntel
+Processeurs logiques : 4
+Frequence du chronometre QPC : 10000000 Hz

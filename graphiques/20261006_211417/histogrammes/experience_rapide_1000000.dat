@@ -1,0 +1,4 @@
+categorie;minimum_s;moyenne_s
+Partitions equilibrees (pivot milieu);0.034281200000;0.053111170000
+Entree aleatoire (pivot aleatoire);0.138757900000;0.207979365000
+Toutes egales (pivot aleatoire) (non mesure);non_mesure;non_mesure
