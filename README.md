@@ -10,7 +10,7 @@ aleatoires et toutes egales.
 Dans PowerShell, depuis ce dossier :
 
 ```powershell
-gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror -finput-charset=UTF-8 -fexec-charset=UTF-8 main.c tri.c graphique.c -o tri_benchmark.exe -lshell32
+gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror -finput-charset=UTF-8 -fexec-charset=UTF-8 main.c tri.c benchmark.c complexite.c resultats.c graphique.c systeme.c -o tri_benchmark.exe -lshell32 -lm
 .\tri_benchmark.exe
 ```
 
@@ -29,7 +29,8 @@ modifient aucun reglage de securite Windows.
 2. Test au choix : aleatoire, croissante, decroissante, presque triee (environ
    1 % d'echanges), dix valeurs repetees ou l'experience specifique du rapide.
 3. Parametres : repetitions, limite lente, taille maximale des tests complets.
-4. Complexites theoriques.
+4. Complexites et analyse : theorie ou analyse du dernier run termine,
+   sans refaire les mesures (voir ci-dessous).
 5. Afficher les courbes : ouvrir les graphiques du dernier run complet,
    sans refaire les mesures (voir les choix ci-dessous).
 6. Histogramme : choisir une configuration et une taille disponibles dans le
@@ -101,11 +102,47 @@ meme si les deux positions coincident. Les variables locales et les tests
 d'indices ne sont pas comptes. Le code des tris est compile deux fois depuis
 les memes definitions; la version chronometree ne contient aucun compteur.
 
+## Complexites et analyse
+
+Dans le menu **4. Complexites et analyse** :
+
+- **1. Complexites theoriques** : ordres de croissance, conventions et references.
+- **2. Analyse du dernier run** : lit et valide `resume.csv` et `operations.csv`,
+  affiche les estimations et exporte `complexite.csv` dans le dossier du run.
+- **0. Retour** : revient au menu principal.
+
+Pour chaque algorithme/configuration, l'analyse ajuste **n**, **n log n** et
+**n^2** aux operations representatives (comparaisons + mouvements), puis
+separement aux temps minimums pour **N >= 1000**. Le modele choisi minimise
+l'ecart-type de `ln(valeur/modele(n))`; la pente log-log est aussi affichee.
+Il faut trois valeurs positives : exclusions et temps nuls sont ignores,
+sinon le resultat reste `non_evalue`. Le nombre de points et la dispersion
+sont fournis; au-dessus de **0.25**, l'estimation est incertaine, et au-dessus
+de **0.60**, aucun modele n'est retenu. Ces seuils sont des regles de lecture,
+pas des intervalles de confiance.
+
+Ce sont des estimations experimentales sur les tailles mesurees, pas des
+preuves de complexite ni des verdicts automatiques de conformite. Le total
+comparaisons + mouvements utilise les conventions de l'app; il ne correspond
+pas au seul compteur de comparaisons du livre. Un passage representatif et une
+entree presque triee ne definissent pas le cas moyen theorique. Un modele
+temporel lineaire retenu peut refleter les constantes et le bruit de mesure.
+
+Independamment des ajustements, les comparaisons sont verifiees contre
+`n(n-1)/2` pour selection et rapide tout egal, `n-1` pour bulles/insertion
+croissants, et la recurrence du rapide construit equilibre. Le CSV distingue
+ces controles exacts des estimations et conserve les references theoriques.
+Il est aussi genere apres chaque nouveau run reussi. Une erreur d'analyse ou
+d'export laisse les mesures et les graphiques utilisables.
+
 ## Fichiers conserves
 
 - `resultats/<run-id>/mesures.csv` : temps individuels et graines.
 - `resume.csv` : minimums, moyennes et statut par taille/cas/algorithme.
 - `operations.csv` : compteurs, repetition representative et graines.
+- `complexite.csv` : references, modeles, pentes log-log, nombres de points,
+  dispersions, statut des estimations et controles exacts. Donnees derivees
+  ajoutables aux anciens runs via le menu 4, sans changer les CSV de mesure.
 - `informations.txt` : parametres, tailles, conventions, version du generateur
   de pivots, version GCC, optimisation, identifiant CPU, processeurs logiques
   et frequence du chronometre.
@@ -146,9 +183,24 @@ gnuplot "graphiques/<run-id>/algorithm_benchmark/algorithm_benchmark.plt"
 
 ## Structure
 
-- `main.c` : menu, saisie, reglages et orchestration des experiences.
-- `tri.c` / `tri.h` : generation, tris, compteur representatif et chronometrage.
-- `graphique.c` / `graphique.h` : sauvegardes, courbes, histogrammes et visionneuse.
+- `main.c` : menus, saisie validee, reglages, presentation console et coordination.
+- `tri.c` / `tri.h` : six tris simples/comptes, noms, verification de l'ordre
+  et generateur de pivots du rapide.
+- `benchmark.c` / `benchmark.h` : configurations, tailles, generation d'entree,
+  graines, exclusions, allocation/copies, repetitions, temps et campagnes.
+- `complexite.c` / `complexite.h` : references theoriques, ajustements de
+  croissance et controles exacts des comparaisons.
+- `resultats.c` / `resultats.h` : dossiers, metadata, CSV/donnees de benchmark,
+  validation des resultats sauvegardes, dernier run et export de l'analyse.
+- `graphique.c` / `graphique.h` : donnees/scripts des courbes et histogrammes,
+  rendu Gnuplot et regeneration; les choix interactifs restent dans `main.c`.
+- `systeme.c` / `systeme.h` : console Windows, chronometre, informations machine,
+  fichiers/dossiers, recherche d'executables, lancement et ouverture d'images.
+
+Les fichiers C/en-tetes restent ASCII. Les deux generateurs ont des etats
+separes, avec les memes sequences qu'avant cette separation. Le benchmark
+transmet sa progression et ses mesures par callbacks : la presentation est
+dans `main.c`, le stockage dans `resultats.c`, hors du temps mesure.
 
 Reference : Sedgewick et Wayne, *Algorithms*, 4e edition,
 [tableau des comparaisons](https://algs4.cs.princeton.edu/cheatsheet/) et
