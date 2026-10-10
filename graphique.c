@@ -3,7 +3,8 @@
 #include <stdlib.h>
 
 /* Determine which series actually contain measurements, avoiding empty plots. */
-static int analyser_donnees(const char *path, int csv, int count, int small, int *available)
+static int analyser_donnees(const char *path, int csv, int count, int maximum,
+                           int logarithmique, int *available)
 {
     memset(available, 0, (size_t)count * sizeof *available);
     FILE *f = fopen(path, "r");
@@ -12,10 +13,11 @@ static int analyser_donnees(const char *path, int csv, int count, int small, int
     if (!fgets(line, sizeof line, f)) { fclose(f); return 0; }
     while (fgets(line, sizeof line, f)) {
         char *field = strtok(line, csv ? ";\r\n" : " \t\r\n");
-        if (!field || (small && atoi(field) > 5000)) continue;
+        if (!field || (maximum && atoi(field) > maximum)) continue;
         for (int i = 0; i < count; ++i) {
             field = strtok(NULL, csv ? ";\r\n" : " \t\r\n");
-            if (field && strcmp(field, "non_mesure") != 0) available[i] = 1;
+            if (field && strcmp(field, "non_mesure") != 0 &&
+                (!logarithmique || strtod(field, NULL) > 0)) available[i] = 1;
             if (csv) strtok(NULL, ";\r\n"); /* average follows minimum */
         }
     }
@@ -27,6 +29,7 @@ static int analyser_donnees(const char *path, int csv, int count, int small, int
 static int creer_script_selection(const DossierExperience *d, const char *data_relative,
                         const char *graph_relative, const char *title, int csv,
                         int count, const char *const *labels, unsigned selection, int small,
+                        int maximum, int logarithmique,
                         char *script_path)
 {
     char data[LONGUEUR_CHEMIN], png[LONGUEUR_CHEMIN];
@@ -35,7 +38,8 @@ static int creer_script_selection(const DossierExperience *d, const char *data_r
         !chemin(png, sizeof png, "%s/%s.png", d->graphiques, graph_relative)) return -1;
     if (!fichier_existe(data)) return 0;
     int available[NOMBRE_ALGORITHMES];
-    if (!analyser_donnees(data, csv, count, small, available)) return -1;
+    if (!maximum && small) maximum = 5000;
+    if (!analyser_donnees(data, csv, count, maximum, logarithmique, available)) return -1;
     int series = 0;
     for (int i = 0; i < count; ++i) if (selection & (1u << i)) series += available[i];
     if (!series) return 0;
@@ -44,15 +48,28 @@ static int creer_script_selection(const DossierExperience *d, const char *data_r
     fprintf(f, "set encoding utf8\nset terminal pngcairo size 1024,768 font 'Arial,10'\n");
     fprintf(f, "set output '%s'\nset datafile missing 'non_mesure'\n", png);
     if (csv) fputs("set datafile separator ';'\n", f);
-    fprintf(f, "set title '%s'\nset xlabel 'Taille du tableau (N)'\nset ylabel 'Temps minimum (secondes)'\nset grid\nset yrange [0:*]\n", title);
-    if (small) fputs("set xrange [0:5000]\n", f);
+    fprintf(f, "set title '%s'\nset xlabel 'Taille du tableau (N)'\n", title);
+    if (logarithmique)
+        fputs("set ylabel 'Temps minimum (secondes, echelle logarithmique)'\n"
+              "set logscale y 10\nset format y '%.3g'\nset grid ytics mytics\n"
+              "set key outside top center horizontal maxcols 3\n", f);
+    else fputs("set ylabel 'Temps minimum (secondes)'\nset grid\nset yrange [0:*]\n", f);
+    if (maximum) fprintf(f, "set xrange [0:%d]\n", maximum);
     fputs("plot ", f);
     int printed = 0;
     const char *colors[] = {"#d62728", "#ff7f0e", "#9467bd", "#1f77b4", "#2ca02c", "#8c564b"};
     for (int i = 0; i < count; ++i) {
         if (!(selection & (1u << i)) || !available[i]) continue;
         if (printed++) fputs(", ", f);
-        fprintf(f, "'%s' %susing 1:%d title '%s' with linespoints lc rgb '%s'", data, csv ? "every ::1 " : "", csv ? 2 + 2 * i : 2 + i, labels[i], colors[i]);
+        int column = csv ? 2 + 2 * i : 2 + i;
+        fprintf(f, "'%s' %susing 1:", data, csv ? "every ::1 " : "");
+        if (maximum || logarithmique) {
+            fputs("(", f);
+            if (maximum) fprintf(f, "column(1)<=%d && ", maximum);
+            fprintf(f, "column(%d)%s ? column(%d) : 1/0)",
+                    column, logarithmique ? ">0" : ">=0", column);
+        } else fprintf(f, "%d", column);
+        fprintf(f, " title '%s' with linespoints lc rgb '%s'", labels[i], colors[i]);
     }
     fputs("\nunset output\n", f);
     return fermer_sortie(f) ? 1 : -1;
@@ -64,7 +81,7 @@ static int creer_script(const DossierExperience *d, const char *data_relative,
 {
     unsigned selection = ((1u << count) - 1u) & ~((1u << first) - 1u);
     return creer_script_selection(d, data_relative, graph_relative, title, csv,
-                                  count, labels, selection, small, script_path);
+                                  count, labels, selection, small, 0, 0, script_path);
 }
 
 static int regenerer_script(const char *script, void *exe)
@@ -178,13 +195,16 @@ static int ecrire_histogramme(const DossierExperience *d, const char *base,
    need rendering; the saved measurements are never rewritten. */
 static int montrer_courbe(const DossierExperience *d, const char *data,
                           const char *relative, const char *title, int csv,
-                          int count, const char *const *labels, unsigned selection, int small)
+                          int count, const char *const *labels, unsigned selection, int small,
+                          int maximum, int logarithmique)
 {
     char png[LONGUEUR_CHEMIN], script[LONGUEUR_CHEMIN], folder[LONGUEUR_CHEMIN];
     if (!chemin(png, sizeof png, "%s/%s.png", d->graphiques, relative) ||
         !chemin(script, sizeof script, "%s/%s.plt", d->graphiques, relative)) return 0;
     printf("Courbe : %s\n", png);
     puts("Temps minimum en secondes. Les tests non mesures n'ont aucun point, jamais zero.");
+    if (logarithmique)
+        puts("Echelle logarithmique : ecarts multiplicatifs; temps nuls non traces.");
     if (!fichier_existe(png)) {
         if (!chemin(folder, sizeof folder, "%s/%s", d->graphiques, relative)) return 0;
         char *slash = strrchr(folder, '/');
@@ -194,7 +214,7 @@ static int montrer_courbe(const DossierExperience *d, const char *data,
             fprintf(stderr, "Impossible de creer le dossier : %s\n", folder); return 0;
         }
         int result = creer_script_selection(d, data, relative, title, csv, count,
-                                            labels, selection, small, script);
+                                            labels, selection, small, maximum, logarithmique, script);
         if (result <= 0) {
             fprintf(stderr, "Donnees absentes, illisibles ou sans mesure pour cette vue : %s/%s\n",
                     d->resultats, data); return 0;
@@ -213,7 +233,8 @@ static int montrer_courbe(const DossierExperience *d, const char *data,
     return 1;
 }
 
-static int montrer_selection(const DossierExperience *d, int c, int a, unsigned selection, int small)
+static int montrer_selection(const DossierExperience *d, int c, int a, unsigned selection,
+                             int small, int maximum, int logarithmique)
 {
     char data[128], relative[128], title[256];
     const char *labels[NOMBRE_ALGORITHMES];
@@ -251,7 +272,26 @@ static int montrer_selection(const DossierExperience *d, int c, int a, unsigned 
         } else snprintf(relative, sizeof relative, "comparaisons/%s_algos_%02x%s",
                         fichier_configuration((Configuration)c), selection, small ? "_petites_tailles" : "");
     }
-    return montrer_courbe(d, data, relative, title, csv, count, labels, selection, small);
+    if (maximum || logarithmique) {
+        if (!maximum && small) maximum = 5000;
+        const char *scale = logarithmique ? "_log" : "";
+        if (c < NOMBRE_CONFIGURATIONS) {
+            csv = 1;
+            snprintf(data, sizeof data, "%s.csv", fichier_configuration((Configuration)c));
+            snprintf(relative, sizeof relative, "comparaisons/%s_algos_%02x_max_%d%s",
+                     fichier_configuration((Configuration)c), selection, maximum, scale);
+            if (maximum) snprintf(title, sizeof title, "Comparaison - %s - N <= %d",
+                                  nom_configuration((Configuration)c), maximum);
+            else snprintf(title, sizeof title, "Comparaison - %s", nom_configuration((Configuration)c));
+        } else if (c == QUICK_EQUILIBRE && a < 0) {
+            snprintf(relative, sizeof relative, "comparaisons/experience_rapide_max_%d%s", maximum, scale);
+        } else {
+            snprintf(relative, sizeof relative, "comparaisons/%s_configurations_max_%d%s",
+                     fichier_algorithme((Algorithme)a), maximum, scale);
+        }
+    }
+    return montrer_courbe(d, data, relative, title, csv, count, labels, selection,
+                          small, maximum, logarithmique);
 }
 
 int generer_histogramme(const DossierExperience *d, Configuration configuration, int n, int open_image)
@@ -325,13 +365,19 @@ int generer_histogramme(const DossierExperience *d, Configuration configuration,
 int afficher_courbe(const DossierExperience *d, const DemandeCourbe *demande)
 {
     if (!d || !demande) return 0;
+    if (demande->taille_max < 0 || demande->taille_max > TAILLE_MAXIMALE ||
+        (demande->echelle_logarithmique != 0 && demande->echelle_logarithmique != 1)) return 0;
     if (demande->type == COURBE_CONFIGURATIONS) {
         if (demande->algorithme < SELECTION || demande->algorithme >= NOMBRE_ALGORITHMES) return 0;
-        return montrer_selection(d, NOMBRE_CONFIGURATIONS, demande->algorithme, 0, 0);
+        return montrer_selection(d, NOMBRE_CONFIGURATIONS, demande->algorithme, 0, 0,
+                                 demande->taille_max, demande->echelle_logarithmique);
     }
-    if (demande->type == COURBE_RAPIDE) return montrer_selection(d, QUICK_EQUILIBRE, -1, 0, 0);
+    if (demande->type == COURBE_RAPIDE) return montrer_selection(d, QUICK_EQUILIBRE, -1, 0, 0,
+                                                             demande->taille_max, demande->echelle_logarithmique);
     if (demande->type != COURBE_COMPARAISON || demande->configuration < ALEATOIRE ||
         demande->configuration >= NOMBRE_CONFIGURATIONS || !demande->selection ||
         (demande->selection & ~((1u << NOMBRE_ALGORITHMES) - 1u))) return 0;
-    return montrer_selection(d, demande->configuration, -1, demande->selection, demande->petites_tailles != 0);
+    return montrer_selection(d, demande->configuration, -1, demande->selection,
+                             demande->petites_tailles != 0, demande->taille_max,
+                             demande->echelle_logarithmique);
 }

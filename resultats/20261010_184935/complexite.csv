@@ -1,0 +1,34 @@
+configuration;algorithme;reference_theorique;points_operations;modele_operations;exposant_operations;dispersion_operations;statut_operations;points_temps;modele_temps;exposant_temps;dispersion_temps;statut_temps;verification_comparaisons_exactes;points_exacts;ecarts_exacts
+aleatoire;selection_sort;Theta(n^2) pour toute entree;8;n^2;1.994790;0.014940;estimation;6;n^2;2.002746;0.008427;estimation;verifie;8;0
+aleatoire;bubble_sort;O(n^2), cout dependant de l'entree;8;n^2;2.005100;0.020096;estimation;6;n^2;2.166687;0.258838;incertain;non_applicable;0;0
+aleatoire;insertion_sort;O(n^2), cout dependant de l'entree;8;n^2;2.002045;0.016110;estimation;6;n^2;1.965938;0.059966;estimation;non_applicable;0;0
+aleatoire;quick_sort_input_order;n log n attendu sous hypotheses, pire O(n^2);8;n log n;1.142578;0.053782;estimation;6;n log n;1.070541;0.062097;estimation;non_applicable;0;0
+aleatoire;merge_sort;Theta(n log n), fusion systematique;8;n log n;1.134642;0.011491;estimation;6;n log n;1.073180;0.063516;estimation;non_applicable;0;0
+aleatoire;heap_sort;O(n log n), Theta(n) possible sur valeurs toutes egales;8;n log n;1.144594;0.034413;estimation;6;n log n;1.100353;0.029826;estimation;non_applicable;0;0
+croissant;selection_sort;Theta(n^2) pour toute entree;8;n^2;2.001119;0.003231;estimation;6;n^2;2.011232;0.018796;estimation;verifie;8;0
+croissant;bubble_sort;Theta(n) sur entree croissante;8;n;1.001119;0.003231;estimation;6;n;1.008543;0.032683;estimation;verifie;8;0
+croissant;insertion_sort;Theta(n) sur entree croissante;8;n;1.001119;0.003231;estimation;6;n;1.001986;0.025754;estimation;verifie;8;0
+croissant;quick_sort_input_order;n log n attendu sous hypotheses, pire O(n^2);8;n log n;1.150115;0.055949;estimation;6;n;1.015889;0.035468;estimation;non_applicable;0;0
+croissant;merge_sort;Theta(n log n), fusion systematique;8;n log n;1.128998;0.005834;estimation;6;n;1.012311;0.058524;estimation;non_applicable;0;0
+croissant;heap_sort;O(n log n), Theta(n) possible sur valeurs toutes egales;8;n log n;1.139859;0.023905;estimation;6;n;1.022137;0.053534;estimation;non_applicable;0;0
+decroissant;selection_sort;Theta(n^2) pour toute entree;8;n^2;1.997793;0.006365;estimation;6;n^2;2.013132;0.020281;estimation;verifie;8;0
+decroissant;bubble_sort;Theta(n^2) sur entree inverse;8;n^2;2.001119;0.003231;estimation;6;n^2;2.015616;0.026920;estimation;non_applicable;0;0
+decroissant;insertion_sort;Theta(n^2) sur entree inverse;8;n^2;2.000010;0.000033;estimation;6;n^2;2.002868;0.009263;estimation;non_applicable;0;0
+decroissant;quick_sort_input_order;n log n attendu sous hypotheses, pire O(n^2);8;n log n;1.127841;0.051703;estimation;6;n;1.022228;0.035693;estimation;non_applicable;0;0
+decroissant;merge_sort;Theta(n log n), fusion systematique;8;n log n;1.129747;0.000552;estimation;6;n;1.055353;0.086187;estimation;non_applicable;0;0
+decroissant;heap_sort;O(n log n), Theta(n) possible sur valeurs toutes egales;8;n log n;1.154120;0.056334;estimation;6;n log n;1.056292;0.084651;estimation;non_applicable;0;0
+presque_trie;selection_sort;Theta(n^2) pour toute entree;8;n^2;2.001051;0.003036;estimation;6;n^2;2.012275;0.019116;estimation;verifie;8;0
+presque_trie;bubble_sort;O(n^2), cout dependant de l'entree;8;n^2;2.127965;0.371692;incertain;6;n^2;2.048055;0.084464;estimation;non_applicable;0;0
+presque_trie;insertion_sort;O(n+I), I = nombre d'inversions;8;n^2;1.919850;0.233988;estimation;6;n^2;1.922217;0.134757;estimation;non_applicable;0;0
+presque_trie;quick_sort_input_order;n log n attendu sous hypotheses, pire O(n^2);8;n log n;1.134804;0.048144;estimation;6;n;1.018031;0.028219;estimation;non_applicable;0;0
+presque_trie;merge_sort;Theta(n log n), fusion systematique;8;n log n;1.143902;0.032746;estimation;6;n;1.046104;0.074868;estimation;non_applicable;0;0
+presque_trie;heap_sort;O(n log n), Theta(n) possible sur valeurs toutes egales;8;n log n;1.140148;0.024424;estimation;6;n;1.026823;0.052873;estimation;non_applicable;0;0
+valeurs_repetees;selection_sort;Theta(n^2) pour toute entree;8;n^2;1.995579;0.012540;estimation;6;n^2;2.011815;0.018359;estimation;verifie;8;0
+valeurs_repetees;bubble_sort;O(n^2), cout dependant de l'entree;8;n^2;1.999452;0.003977;estimation;6;n^2;2.142287;0.237929;estimation;non_applicable;0;0
+valeurs_repetees;insertion_sort;O(n^2), cout dependant de l'entree;8;n^2;1.993396;0.016180;estimation;6;n^2;1.995539;0.009563;estimation;non_applicable;0;0
+valeurs_repetees;quick_sort_input_order;O(n^2), sensible aux doublons;8;n^2;1.832235;0.434506;incertain;6;n^2;1.853967;0.255188;incertain;non_applicable;0;0
+valeurs_repetees;merge_sort;Theta(n log n), fusion systematique;8;n log n;1.133281;0.008412;estimation;6;n;1.016831;0.038721;estimation;non_applicable;0;0
+valeurs_repetees;heap_sort;O(n log n), Theta(n) possible sur valeurs toutes egales;8;n log n;1.140444;0.025190;estimation;6;n;1.020503;0.037860;estimation;non_applicable;0;0
+quick_equilibre;quick_sort_input_order;Theta(n log n), partitions construites equilibrees;8;n log n;1.139000;0.021663;estimation;6;n;1.035870;0.081587;estimation;verifie;8;0
+quick_aleatoire;quick_sort_input_order;n log n attendu sous hypotheses, pire O(n^2);8;n log n;1.130006;0.025269;estimation;6;n log n;1.090182;0.036858;estimation;non_applicable;0;0
+quick_egaux;quick_sort_input_order;Theta(n^2), partition en deux groupes;8;n^2;1.988421;0.033186;estimation;6;n^2;1.997870;0.016741;estimation;verifie;8;0

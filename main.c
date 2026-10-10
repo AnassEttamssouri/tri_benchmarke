@@ -174,10 +174,13 @@ static void choisir_test(const Parametres *p)
     lancer_tests(&selected, choice - 1);
 }
 
-static int ouvrir_selection_ui(const DossierExperience *d, int c, int a, unsigned selection, int small)
+static int ouvrir_selection_ui(const DossierExperience *d, int c, int a, unsigned selection, int maximum)
 {
     DemandeCourbe demande = {COURBE_COMPARAISON, (Configuration)c,
-                            a < 0 ? SELECTION : (Algorithme)a, selection, small};
+                            a < 0 ? SELECTION : (Algorithme)a, selection,
+                            maximum == 5000, maximum,
+                            c < NOMBRE_CONFIGURATIONS &&
+                            selection == (1u << NOMBRE_ALGORITHMES) - 1u};
     if (c == NOMBRE_CONFIGURATIONS && a >= 0) demande.type = COURBE_CONFIGURATIONS;
     else if (c == QUICK_EQUILIBRE) demande.type = COURBE_RAPIDE;
     return afficher_courbe(d, &demande);
@@ -275,19 +278,23 @@ static int afficher_courbes(const DossierExperience *d, int (*read_int)(const ch
             selection = choisir_algorithmes_courbe(number, read_int);
             if (!selection) continue;
         }
-        int small = 0;
+        int maximum = 0;
         if (c < NOMBRE_CONFIGURATIONS) {
             puts("1. Toutes les tailles disponibles");
             puts("2. Tailles jusqu'a 5000");
+            puts("3. Tailles jusqu'a 20000");
+            puts("4. Tailles jusqu'a 50000");
+            puts("5. Tailles jusqu'a 100000");
             puts("0. Retour");
-            int view = read_int("Vue : ", 0, 2);
+            int view = read_int("Vue : ", 0, 5);
             if (view <= 0) continue;
-            small = view == 2;
+            const int maxima[] = {0, 0, 5000, 20000, 50000, 100000};
+            maximum = maxima[view];
             for (int algorithm = 0; algorithm < NOMBRE_ALGORITHMES; ++algorithm) {
                 if (!(selection & (1u << algorithm))) continue;
                 int skipped = 0;
                 for (int i = 0; i < count; ++i)
-                    if (rows[i].configuration == (Configuration)c && (!small || rows[i].taille <= 5000) &&
+                    if (rows[i].configuration == (Configuration)c && (!maximum || rows[i].taille <= maximum) &&
                         !rows[i].resultat.effectue[algorithm]) {
                         if (!skipped++) printf("%s : non_mesure aux tailles", nom_algorithme((Algorithme)algorithm));
                         printf(" %d", rows[i].taille);
@@ -295,7 +302,7 @@ static int afficher_courbes(const DossierExperience *d, int (*read_int)(const ch
                 if (skipped) putchar('\n');
             }
         }
-        ouvrir_selection_ui(d, c, a, selection, small);
+        ouvrir_selection_ui(d, c, a, selection, maximum);
     }
 }
 
@@ -327,7 +334,7 @@ static int afficher_histogramme(const DossierExperience *d, int (*read_int)(cons
 
 int main(void)
 {
-    Parametres p = {20, 20000, TAILLE_MAXIMALE};
+    Parametres p = {5, 100000, 100000};
     initialiser_console();
     setlocale(LC_ALL, ""); setlocale(LC_NUMERIC, "C");
     for (;;) {

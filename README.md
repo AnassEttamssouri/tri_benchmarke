@@ -57,10 +57,13 @@ Dans **5. Afficher les courbes** :
   comparaisons personnalisees deja crees, sans relancer les tris.
 - **0. Retour** : revenir au menu principal.
 
-Les comparaisons sur une configuration proposent toutes les tailles disponibles
-ou seulement celles jusqu'a 5000. L'axe vertical reste le **temps minimum en
-secondes**; les exclusions restent des points absents. Les couleurs des
-algorithmes sont conservees dans chaque comparaison.
+Les comparaisons sur une configuration proposent toutes les tailles disponibles,
+ou une vue jusqu'a 5000, 20000, 50000 ou 100000. Les comparaisons des six tris
+utilisent une **echelle logarithmique du temps minimum en secondes** : un meme
+ecart vertical represente un meme rapport de temps, pas une meme difference.
+Les autres selections conservent leur echelle lineaire. Les exclusions restent
+des points absents; les temps nuls ne sont pas traces sur l'echelle logarithmique.
+Les couleurs des algorithmes sont conservees dans chaque comparaison.
 Les PNG existants s'ouvrent avec Windows, meme sans Gnuplot. Une image manquante
 ou une nouvelle comparaison est generee depuis les donnees sauvegardees.
 Les chemins sont affiches si la generation ou la visionneuse echoue.
@@ -68,7 +71,10 @@ La logique de l'application est en C; Gnuplot reste le moteur de rendu.
 
 Tailles : 100, 500, 1000, 5000, 10000, 20000, 50000, 100000, 500000, 1000000.
 Un test selectionne inclut toutes les tailles jusqu'au maximum choisi.
-Defauts : **20 repetitions**, **1 million d'elements**, **limite lente 20000**.
+Defauts : **5 repetitions**, **100000 elements**, **limite lente 100000**.
+Les six tris sont donc mesures sur la meme plage dans les cinq configurations.
+Le plafond optionnel d'un million reste disponible dans les parametres; les
+tris quadratiques peuvent alors demander plusieurs jours, notamment avec 20 repetitions.
 Les repetitions sont modifiables de 1 a 100 et la limite de 1 a 1000000.
 Les reglages restent en memoire pour la session et sont enregistres avec chaque run.
 
@@ -93,7 +99,7 @@ mais les temps dependent du materiel et de la charge du systeme.
 Les minimums et les moyennes arithmetiques utilisent toutes les repetitions.
 Le minimum des temps n'est pas le meilleur cas theorique : il reste une mesure
 sur la configuration choisie. Le cas moyen theorique n'est pas non plus la
-moyenne de vingt temps sur des entrees triees ou identiques.
+moyenne des temps sur des entrees triees ou identiques.
 Les graphiques conservent les **minimums**, comme l'application initiale.
 Les compteurs correspondent a **un passage separe sur la repetition 1**, pas a
 une moyenne : comparaisons entre elements ou avec le pivot; mouvements lors des

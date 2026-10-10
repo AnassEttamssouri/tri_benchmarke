@@ -8,6 +8,8 @@ typedef struct {
     Algorithme algorithme;
     unsigned selection;
     int petites_tailles;
+    int taille_max; /* 0 keeps the existing full/small view. */
+    int echelle_logarithmique;
 } DemandeCourbe;
 int generer_graphiques(const DossierExperience *dossier);
 int afficher_courbe(const DossierExperience *dossier, const DemandeCourbe *demande);
