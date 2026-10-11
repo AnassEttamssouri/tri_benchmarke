@@ -22,6 +22,16 @@ static void K(insertionSort)(int *arr, int n)
     }
 }
 
+static void K(shellSort)(int *arr, int n)
+{
+    int gap = 1;
+    while (gap < n / 3) gap = 3 * gap + 1;
+    for (; gap >= 1; gap /= 3)
+        for (int i = gap; i < n; ++i)
+            for (int j = i; j >= gap && LT(arr[j], arr[j - gap]); j -= gap)
+                K(swap)(&arr[j], &arr[j - gap]);
+}
+
 static void K(selectionSort)(int *arr, int n)
 {
     for (int i = 0; i < n - 1; ++i) {
@@ -143,6 +153,7 @@ static void K(dispatch)(Algorithme algorithme, int *arr, int *temp, int n, int m
         break;
     case FUSION: K(mergeSortRecursive)(arr, temp, 0, n - 1); break;
     case TAS: K(heapSort)(arr, n); break;
+    case SHELL: K(shellSort)(arr, n); break;
     }
 }
 
@@ -181,11 +192,11 @@ static Operations compteur;
 
 static const char *const NOMS_ALGORITHMES[] = {
     "Tri par selection", "Tri a bulles", "Tri par insertion",
-    "Tri rapide", "Tri fusion", "Tri par tas"
+    "Tri rapide", "Tri fusion", "Tri par tas", "Tri Shell"
 };
 static const char *const FICHIERS_ALGORITHMES[] = {
     "selection_sort", "bubble_sort", "insertion_sort", "quick_sort_input_order",
-    "merge_sort", "heap_sort"
+    "merge_sort", "heap_sort", "shell_sort"
 };
 const char *nom_algorithme(Algorithme a) { return NOMS_ALGORITHMES[a]; }
 const char *fichier_algorithme(Algorithme a) { return FICHIERS_ALGORITHMES[a]; }

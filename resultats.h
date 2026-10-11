@@ -7,6 +7,7 @@ typedef struct {
     char identifiant[40];
     char resultats[LONGUEUR_CHEMIN], graphiques[LONGUEUR_CHEMIN];
     int taille_max;
+    unsigned algorithmes; /* Present algorithm IDs; legacy runs contain bits 0..5. */
 } DossierExperience;
 int creer_dossier_experience(DossierExperience *dossier, const Parametres *parametres,
                             uint32_t graine, int choix);

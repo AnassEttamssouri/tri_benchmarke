@@ -1,0 +1,12 @@
+set encoding utf8
+set terminal pngcairo size 1024,768 font 'Arial,10'
+set output 'graphiques/20261011_212626/configurations/presque_trie_rapides.png'
+set datafile missing 'non_mesure'
+set datafile separator ';'
+set title 'Comparaison - Tableau presque trie - rapide, fusion, tas et Shell'
+set xlabel 'Taille du tableau (N)'
+set ylabel 'Temps minimum (secondes)'
+set grid
+set yrange [0:*]
+plot 'resultats/20261011_212626/presque_trie.csv' every ::1 using 1:8 title 'Tri rapide' with linespoints lc rgb '#1f77b4', 'resultats/20261011_212626/presque_trie.csv' every ::1 using 1:10 title 'Tri fusion' with linespoints lc rgb '#2ca02c', 'resultats/20261011_212626/presque_trie.csv' every ::1 using 1:12 title 'Tri par tas' with linespoints lc rgb '#8c564b', 'resultats/20261011_212626/presque_trie.csv' every ::1 using 1:14 title 'Tri Shell' with linespoints lc rgb '#e377c2'
+unset output

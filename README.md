@@ -1,7 +1,8 @@
 # Tri benchmark
 
 Application console Windows en C : selection, bulles, insertion, rapide a pivot
-aleatoire, fusion et tas. L'experience specifique du rapide conserve le pivot
+aleatoire, fusion, tas et Shell (ecarts de Knuth 1, 4, 13, 40, ...).
+L'experience specifique du rapide conserve le pivot
 milieu sur des partitions equilibrees et le pivot aleatoire sur les entrees
 aleatoires et toutes egales.
 
@@ -36,7 +37,7 @@ modifient aucun reglage de securite Windows.
 6. Histogramme : choisir une configuration et une taille disponibles dans le
    dernier run complet. Barres groupees du minimum et de la moyenne en secondes;
    les trois cas et strategies de pivot sont compares pour l'experience rapide.
-   Une vue rapide/fusion/tas est ajoutee si une barre lente depasse cinq fois
+   Une vue rapide/fusion/tas/Shell est ajoutee si une barre lente depasse cinq fois
    la plus grande moyenne des algorithmes rapides. Le PNG principal est ouvert
    avec la visionneuse Windows; les chemins restent affiches en cas d'echec.
 7. Quitter (la fin de l'entree ferme aussi le menu proprement).
@@ -45,11 +46,11 @@ Dans **5. Afficher les courbes** :
 
 - **1. Un algorithme** : choisir le tri, puis une configuration disponible ou
   toutes les configurations pour ouvrir son graphique existant.
-- **2. Tous les algorithmes** : choisir une configuration et comparer les six
+- **2. Tous les algorithmes** : choisir une configuration et comparer les sept
   tris ensemble sur un seul graphique.
 - **3. Comparer deux algorithmes** : choisir une configuration et deux tris
   distincts.
-- **4. Comparer plusieurs algorithmes** : choisir une configuration et 3 a 6
+- **4. Comparer plusieurs algorithmes** : choisir une configuration et 3 a 7
   tris distincts.
 - **5. Experience du tri rapide** : partitions equilibrees (pivot milieu),
   entree aleatoire et toutes valeurs egales (pivot aleatoire).
@@ -58,7 +59,7 @@ Dans **5. Afficher les courbes** :
 - **0. Retour** : revenir au menu principal.
 
 Les comparaisons sur une configuration proposent toutes les tailles disponibles,
-ou une vue jusqu'a 5000, 20000, 50000 ou 100000. Les comparaisons des six tris
+ou une vue jusqu'a 5000, 20000, 50000 ou 100000. Les comparaisons des sept tris
 utilisent une **echelle logarithmique du temps minimum en secondes** : un meme
 ecart vertical represente un meme rapport de temps, pas une meme difference.
 Les autres selections conservent leur echelle lineaire. Les exclusions restent
@@ -72,11 +73,21 @@ La logique de l'application est en C; Gnuplot reste le moteur de rendu.
 Tailles : 100, 500, 1000, 5000, 10000, 20000, 50000, 100000, 500000, 1000000.
 Un test selectionne inclut toutes les tailles jusqu'au maximum choisi.
 Defauts : **5 repetitions**, **100000 elements**, **limite lente 100000**.
-Les six tris sont donc mesures sur la meme plage dans les cinq configurations.
+Les sept tris sont donc mesures sur la meme plage dans les cinq configurations.
 Le plafond optionnel d'un million reste disponible dans les parametres; les
 tris quadratiques peuvent alors demander plusieurs jours, notamment avec 20 repetitions.
 Les repetitions sont modifiables de 1 a 100 et la limite de 1 a 1000000.
 Les reglages restent en memoire pour la session et sont enregistres avec chaque run.
+
+Shell utilise des echanges espaces, compte un echange comme trois mouvements,
+reste en place et n'est pas stable. Sa borne au pire avec ces ecarts est
+O(n^(3/2)); son cas moyen n'est pas connu. Les trois modeles ajustes (n,
+n log n, n^2) n'incluent pas n^(3/2) et ne determinent pas sa complexite.
+Il n'est pas soumis a la limite lente et peut atteindre un million.
+Les anciens resultats a six tris restent lisibles : Shell y est absent de
+cette version. Les nouveaux fichiers informations.txt enumerent les sept
+algorithmes. Les formats des CSV longs restent identiques; les fichiers
+comparatifs ajoutent les colonnes Shell a la fin, sans reecrire les anciens.
 
 La limite s'applique a selection/bulles/insertion et au rapide sur dix valeurs
 repetees ou toutes egales : sa partition en deux groupes peut etre quadratique.
@@ -152,7 +163,7 @@ d'export laisse les mesures et les graphiques utilisables.
 - `informations.txt` : parametres, tailles, conventions, version du generateur
   de pivots, version GCC, optimisation, identifiant CPU, processeurs logiques
   et frequence du chronometre.
-- `<configuration>.csv` : comparaisons des six algorithmes.
+- `<configuration>.csv` : comparaisons des sept algorithmes (six dans les anciens tests).
 - `benchmark/res.dat` : comparaison globale sur l'entree aleatoire.
 - `cases/*_cases.dat` : comparaison des configurations par algorithme et
   experience specifique du rapide.
@@ -190,7 +201,7 @@ gnuplot "graphiques/<run-id>/algorithm_benchmark/algorithm_benchmark.plt"
 ## Structure
 
 - `main.c` : menus, saisie validee, reglages, presentation console et coordination.
-- `tri.c` / `tri.h` : six tris simples/comptes, noms, verification de l'ordre
+- `tri.c` / `tri.h` : sept tris simples/comptes, noms, verification de l'ordre
   et generateur de pivots du rapide.
 - `benchmark.c` / `benchmark.h` : configurations, tailles, generation d'entree,
   graines, exclusions, allocation/copies, repetitions, temps et campagnes.

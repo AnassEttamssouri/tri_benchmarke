@@ -88,6 +88,7 @@ static int analyser_dossier(const DossierExperience *d, const LigneResultat *row
         printf("\n===== Analyse experimentale du run %s =====\n", d->identifiant);
         puts("Operations = comparaisons + mouvements, passage representatif (pas une moyenne).");
         puts("Temps = minimum en secondes, tailles N >= 1000. Modeles : n, n log n, n^2.");
+        puts("Shell : ces trois modeles n'incluent pas n^(3/2); ils ne determinent pas sa complexite theorique.");
         puts("Dispersion > 0.25 : incertain; > 0.60 : aucun modele retenu.");
         puts("Une estimation sur ces tailles n'est pas une preuve de complexite ou de cas moyen.");
         puts("La verification exacte porte uniquement sur les comparaisons et les formules applicables.");
@@ -180,7 +181,7 @@ static int ouvrir_selection_ui(const DossierExperience *d, int c, int a, unsigne
                             a < 0 ? SELECTION : (Algorithme)a, selection,
                             maximum == 5000, maximum,
                             c < NOMBRE_CONFIGURATIONS &&
-                            selection == (1u << NOMBRE_ALGORITHMES) - 1u};
+                            selection == d->algorithmes};
     if (c == NOMBRE_CONFIGURATIONS && a >= 0) demande.type = COURBE_CONFIGURATIONS;
     else if (c == QUICK_EQUILIBRE) demande.type = COURBE_RAPIDE;
     return afficher_courbe(d, &demande);
@@ -215,16 +216,20 @@ static int choisir_configuration_courbe(const LigneResultat *rows, int count, in
     return choice <= 0 ? -1 : choices[choice - 1];
 }
 
-static unsigned choisir_algorithmes_courbe(int number, int (*read_int)(const char *, int, int))
+static unsigned choisir_algorithmes_courbe(int number, unsigned disponibles,
+                                         int (*read_int)(const char *, int, int))
 {
     unsigned selection = 0;
-    for (int a = 0; a < NOMBRE_ALGORITHMES; ++a) printf("%d. %s\n", a + 1, nom_algorithme((Algorithme)a));
+    for (int a = 0; a < NOMBRE_ALGORITHMES; ++a)
+        printf("%d. %s%s\n", a + 1, nom_algorithme((Algorithme)a),
+               disponibles & (1u << a) ? "" : " (absent de cette version)");
     puts("0. Retour");
     for (int selected = 0; selected < number;) {
         printf("Algorithme %d/%d :\n", selected + 1, number);
         int choice = read_int("Votre choix : ", 0, NOMBRE_ALGORITHMES);
         if (choice <= 0) return 0;
         unsigned bit = 1u << (choice - 1);
+        if (!(disponibles & bit)) { puts("Algorithme absent de cette version des resultats."); continue; }
         if (selection & bit) { puts("Algorithme deja choisi. Choisissez-en un autre."); continue; }
         selection |= bit;
         ++selected;
@@ -257,9 +262,9 @@ static int afficher_courbes(const DossierExperience *d, int (*read_int)(const ch
             continue;
         }
         int a = -1;
-        unsigned selection = (1u << NOMBRE_ALGORITHMES) - 1u;
+        unsigned selection = d->algorithmes;
         if (choice == 1) {
-            selection = choisir_algorithmes_courbe(1, read_int);
+            selection = choisir_algorithmes_courbe(1, d->algorithmes, read_int);
             if (!selection) continue;
             for (a = 0; !(selection & (1u << a)); ++a) {}
         }
@@ -269,13 +274,15 @@ static int afficher_courbes(const DossierExperience *d, int (*read_int)(const ch
             int number = 2;
             if (choice == 4) {
                 do {
-                    number = read_int("Nombre d'algorithmes (3 a 6, 0 pour retour) : ", 0, NOMBRE_ALGORITHMES);
+                    int maximum_algorithmes = d->algorithmes & (1u << SHELL) ? NOMBRE_ALGORITHMES : SHELL;
+                    printf("Choisissez de 3 a %d algorithmes.\n", maximum_algorithmes);
+                    number = read_int("Nombre d'algorithmes (0 pour retour) : ", 0, maximum_algorithmes);
                     if (number <= 0) break;
-                    if (number < 3) puts("Choisissez entre 3 et 6 algorithmes.");
+                    if (number < 3) puts("Choisissez au moins 3 algorithmes.");
                 } while (number > 0 && number < 3);
                 if (number <= 0) continue;
             }
-            selection = choisir_algorithmes_courbe(number, read_int);
+            selection = choisir_algorithmes_courbe(number, d->algorithmes, read_int);
             if (!selection) continue;
         }
         int maximum = 0;

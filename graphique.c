@@ -57,7 +57,7 @@ static int creer_script_selection(const DossierExperience *d, const char *data_r
     if (maximum) fprintf(f, "set xrange [0:%d]\n", maximum);
     fputs("plot ", f);
     int printed = 0;
-    const char *colors[] = {"#d62728", "#ff7f0e", "#9467bd", "#1f77b4", "#2ca02c", "#8c564b"};
+    const char *colors[] = {"#d62728", "#ff7f0e", "#9467bd", "#1f77b4", "#2ca02c", "#8c564b", "#e377c2"};
     for (int i = 0; i < count; ++i) {
         if (!(selection & (1u << i)) || !available[i]) continue;
         if (printed++) fputs(", ", f);
@@ -94,14 +94,15 @@ int generer_graphiques(const DossierExperience *d)
 {
     char scripts[40][LONGUEUR_CHEMIN], relative[128], title[256];
     int count = 0, result;
+    int algorithms = d->algorithmes == (1u << SHELL) - 1u ? SHELL : NOMBRE_ALGORITHMES;
     const char *algo_labels[NOMBRE_ALGORITHMES];
     for (int a = 0; a < NOMBRE_ALGORITHMES; ++a) algo_labels[a] = nom_algorithme((Algorithme)a);
     const char *case_labels[] = {"Tableau trie", "Tableau aleatoire", "Tableau inverse", "Tableau presque trie", "Dix valeurs repetees"};
     const char *quick_labels[] = {"Partitions equilibrees (pivot milieu)", "Tableau aleatoire (pivot aleatoire)", "Toutes les valeurs egales (pivot aleatoire)"};
-    result = creer_script(d, "benchmark/res.dat", "algorithm_benchmark/algorithm_benchmark", "Sorting Algorithm Performance", 0, NOMBRE_ALGORITHMES, algo_labels, 0, 0, scripts[count]);
+    result = creer_script(d, "benchmark/res.dat", "algorithm_benchmark/algorithm_benchmark", "Sorting Algorithm Performance", 0, algorithms, algo_labels, 0, 0, scripts[count]);
     if (result < 0) return 0;
     count += result;
-    for (int a = 0; a < NOMBRE_ALGORITHMES; ++a) {
+    for (int a = 0; a < algorithms; ++a) {
         char data[128];
         snprintf(data, sizeof data, "cases/%s_cases.dat", fichier_algorithme((Algorithme)a));
         snprintf(relative, sizeof relative, "cases/%s_cases", fichier_algorithme((Algorithme)a));
@@ -120,8 +121,10 @@ int generer_graphiques(const DossierExperience *d)
             if (c == ALEATOIRE && view == 0) continue; /* Global comparison is authoritative. */
             const char *suffix = view == 1 ? "_rapides" : view == 2 ? "_petites_tailles" : "";
             snprintf(relative, sizeof relative, "configurations/%s%s", fichier_configuration((Configuration)c), suffix);
-            snprintf(title, sizeof title, "Comparaison - %s%s", nom_configuration((Configuration)c), view == 1 ? " - rapide, fusion et tas" : view == 2 ? " - tailles jusqu a 5000" : "");
-            result = creer_script(d, data, relative, title, 1, NOMBRE_ALGORITHMES, algo_labels, view == 1 ? RAPIDE : 0, view == 2, scripts[count]);
+            snprintf(title, sizeof title, "Comparaison - %s%s", nom_configuration((Configuration)c), view == 1 ?
+                     (algorithms > SHELL ? " - rapide, fusion, tas et Shell" : " - rapide, fusion et tas") :
+                     view == 2 ? " - tailles jusqu a 5000" : "");
+            result = creer_script(d, data, relative, title, 1, algorithms, algo_labels, view == 1 ? RAPIDE : 0, view == 2, scripts[count]);
             if (result < 0) return 0;
             count += result;
         }
@@ -256,12 +259,12 @@ static int montrer_selection(const DossierExperience *d, int c, int a, unsigned 
         snprintf(relative, sizeof relative, "cases/quick_sort_best_avg_worst_cases");
         snprintf(title, sizeof title, "Tri rapide - Partitions equilibrees, aleatoire et valeurs egales");
     } else {
-        csv = 1; count = NOMBRE_ALGORITHMES;
+        csv = 1; count = d->algorithmes == (1u << SHELL) - 1u ? SHELL : NOMBRE_ALGORITHMES;
         for (int i = 0; i < count; ++i) labels[i] = nom_algorithme((Algorithme)i);
         snprintf(data, sizeof data, "%s.csv", fichier_configuration((Configuration)c));
         snprintf(title, sizeof title, "Comparaison - %s%s", nom_configuration((Configuration)c),
                  small ? " - tailles jusqu a 5000" : "");
-        if (selection == (1u << NOMBRE_ALGORITHMES) - 1u) {
+        if (selection == (d->algorithmes ? d->algorithmes : (1u << NOMBRE_ALGORITHMES) - 1u)) {
             if (c == ALEATOIRE && !small) {
                 csv = 0;
                 snprintf(data, sizeof data, "benchmark/res.dat");
@@ -301,7 +304,8 @@ int generer_histogramme(const DossierExperience *d, Configuration configuration,
     if (!charger_resume(d, rows, &total)) return 0;
     if (configuration < ALEATOIRE || configuration >= NOMBRE_CAS) return 0;
     int special = configuration >= QUICK_EQUILIBRE;
-    int count = special ? 3 : NOMBRE_ALGORITHMES;
+    int count = special ? 3 : d->algorithmes == (1u << SHELL) - 1u ? SHELL : NOMBRE_ALGORITHMES;
+    if (!special && count == SHELL) puts("Shell : absent de cette version des resultats.");
     const char *labels[NOMBRE_ALGORITHMES];
     const char *quick[] = {"Partitions equilibrees (pivot milieu)",
                           "Entree aleatoire (pivot aleatoire)", "Toutes egales (pivot aleatoire)"};
@@ -334,8 +338,9 @@ int generer_histogramme(const DossierExperience *d, Configuration configuration,
             size_t used = strlen(base);
             snprintf(base + used, sizeof base - used, "_rapides");
             size_t length = strlen(title);
-            snprintf(title + length, sizeof title - length, " - rapide, fusion et tas");
-            if (!ecrire_histogramme(d, base, title, 3, labels + RAPIDE, measured + RAPIDE,
+            snprintf(title + length, sizeof title - length, "%s", count > SHELL ?
+                     " - rapide, fusion, tas et Shell" : " - rapide, fusion et tas");
+            if (!ecrire_histogramme(d, base, title, count - RAPIDE, labels + RAPIDE, measured + RAPIDE,
                                    minimum + RAPIDE, average + RAPIDE, scripts[1], png[1])) return 0;
             views = 2;
         }

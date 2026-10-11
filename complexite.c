@@ -23,6 +23,8 @@ const char *const *descriptions_theoriques(int *nombre)
         "Fusion                    : Theta(n log n) dans les trois cas ici.",
         "Tas                       : O(n log n); cas moyen/pire Theta(n log n).",
         "Tas : toutes valeurs egales donnent Theta(n) avec cette implementation.",
+        "Shell, ecarts de Knuth 1,4,13,... : en place, non stable; pire O(n^(3/2)).",
+        "Shell : cas moyen inconnu; les modeles ajustes n,n log n,n^2 n'incluent pas n^(3/2).",
         "Partition rapide en deux groupes : les doublons peuvent provoquer O(n^2).",
         "Valeurs theoriques; les mesures en secondes et les compteurs sont reels.",
         "Minimum chronometre != meilleur cas theorique d'entree.",
@@ -50,6 +52,7 @@ const char *reference_complexite(Algorithme a, Configuration c)
         return "n log n attendu sous hypotheses, pire O(n^2)";
     }
     if (a == FUSION) return "Theta(n log n), fusion systematique";
+    if (a == SHELL) return "Ecarts de Knuth, pire O(n^(3/2)), cas moyen inconnu, modeles ajustes limites";
     return "O(n log n), Theta(n) possible sur valeurs toutes egales";
 }
 
@@ -120,6 +123,12 @@ int analyser_complexites(const LigneResultat *rows, int count, AnalyseComplexite
         if (!configuration_presente(rows, count, (Configuration)c)) continue;
         for (int a = 0; a < NOMBRE_ALGORITHMES; ++a) {
             if (c >= QUICK_EQUILIBRE && a != RAPIDE) continue;
+            if (a == SHELL) {
+                int present = 0;
+                for (int i = 0; i < count; ++i)
+                    if (rows[i].resultat.effectue[SHELL]) { present = 1; break; }
+                if (!present) continue; /* Legacy runs predate Shell. */
+            }
             if (total >= capacity) return total;
             AnalyseComplexite *analysis = &analyses[total++];
             memset(analysis, 0, sizeof *analysis);

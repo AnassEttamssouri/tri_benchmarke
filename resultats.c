@@ -7,6 +7,38 @@
 #include <string.h>
 #include <time.h>
 
+/* Missing roster means the original six-algorithm format. Never infer a new
+   roster from incomplete CSV rows: metadata makes missing Shell rows an error. */
+static int charger_algorithmes(DossierExperience *d)
+{
+    char path[LONGUEUR_CHEMIN], line[1024];
+    const char prefix[] = "Algorithmes :";
+    d->algorithmes = (1u << SHELL) - 1u;
+    if (!chemin(path, sizeof path, "%s/informations.txt", d->resultats)) return 0;
+    FILE *f = fopen(path, "r");
+    if (!f) return errno == ENOENT;
+    int found = 0, ok = 1;
+    while (fgets(line, sizeof line, f)) {
+        if (strncmp(line, prefix, sizeof prefix - 1) != 0) continue;
+        if (found++) { ok = 0; break; }
+        unsigned mask = 0;
+        char *name = strtok(line + sizeof prefix - 1, " \t\r\n");
+        while (name) {
+            int a;
+            for (a = 0; a < NOMBRE_ALGORITHMES; ++a)
+                if (!strcmp(name, fichier_algorithme((Algorithme)a))) break;
+            if (a == NOMBRE_ALGORITHMES || (mask & (1u << a))) { ok = 0; break; }
+            mask |= 1u << a;
+            name = strtok(NULL, " \t\r\n");
+        }
+        if (mask != (1u << NOMBRE_ALGORITHMES) - 1u && mask != (1u << SHELL) - 1u) ok = 0;
+        d->algorithmes = mask;
+    }
+    if (ferror(f)) ok = 0;
+    fclose(f);
+    return ok;
+}
+
 int enregistrer_mesure(const MesureBenchmark *mesure, void *fichier)
 {
     FILE *f = fichier;
@@ -52,11 +84,15 @@ int creer_dossier_experience(DossierExperience *d, const Parametres *p, uint32_t
         if (!chemin(path, sizeof path, "%s/%s", d->graphiques, graphs[i]) || !assurer_dossier(path)) return 0;
     }
     d->taille_max = p->taille_max;
+    d->algorithmes = (1u << NOMBRE_ALGORITHMES) - 1u;
     FILE *f = ouvrir_sortie(d, "informations.txt");
     if (!f) return 0;
     fprintf(f, "Application : tri_benchmark\nIdentifiant : %s\nGraine : %u\n", d->identifiant, (unsigned)seed);
     fprintf(f, "Repetitions : %d\nLimite lente : %d\nTaille maximale : %d\nChoix : %d\n",
             p->repetitions, p->limite_lente, p->taille_max, choice);
+    fputs("Algorithmes :", f);
+    for (int a = 0; a < NOMBRE_ALGORITHMES; ++a) fprintf(f, " %s", fichier_algorithme((Algorithme)a));
+    fputs("\nShell : ecarts de Knuth 1,4,13,...; echanges espaces.\n", f);
     fprintf(f, "Tailles :");
     for (int i = 0; i < NOMBRE_TAILLES && TAILLES[i] <= p->taille_max; ++i) fprintf(f, " %d", TAILLES[i]);
     fprintf(f, "\nTemps : secondes; minimum et moyenne arithmetique.\n"
@@ -155,7 +191,7 @@ int enregistrer_resultats(const DossierExperience *d, const LigneResultat *rows,
     if (configuration_presente(rows, count, ALEATOIRE)) {
         f = ouvrir_sortie(d, "benchmark/res.dat");
         if (!f) return 0;
-        fputs("# Size Selection_Sort Bubble_Sort Insertion_Sort Quick_Sort Merge_Sort Heap_Sort (minimum seconds)\n", f);
+        fputs("# Size Selection_Sort Bubble_Sort Insertion_Sort Quick_Sort Merge_Sort Heap_Sort Shell_Sort (minimum seconds)\n", f);
         for (int i = 0; i < count; ++i) if (rows[i].configuration == ALEATOIRE) {
             fprintf(f, "%d", rows[i].taille);
             for (int a = 0; a < NOMBRE_ALGORITHMES; ++a) ecrire_valeur(f, &rows[i], a);
@@ -196,10 +232,13 @@ int enregistrer_resultats(const DossierExperience *d, const LigneResultat *rows,
 
 int enregistrer_dernier_dossier(const DossierExperience *d)
 {
-    FILE *f = fopen("resultats/dernier_run.txt", "w");
+    const char *temporary = "resultats/dernier_run.tmp";
+    FILE *f = fopen(temporary, "w");
     if (!f) return 0;
     fprintf(f, "%s\n", d->identifiant);
-    return fermer_sortie(f);
+    if (!fermer_sortie(f)) { remove(temporary); return 0; }
+    if (!remplacer_fichier(temporary, "resultats/dernier_run.txt")) { remove(temporary); return 0; }
+    return 1;
 }
 int charger_dernier_dossier(DossierExperience *d)
 {
@@ -214,11 +253,13 @@ int charger_dernier_dossier(DossierExperience *d)
     if (!chemin(d->resultats, sizeof d->resultats, "resultats/%s", d->identifiant) ||
         !chemin(d->graphiques, sizeof d->graphiques, "graphiques/%s", d->identifiant)) return 0;
     d->taille_max = TAILLE_MAXIMALE;
-    return 1;
+    return charger_algorithmes(d);
 }
 
 int charger_resume(const DossierExperience *d, LigneResultat *rows, int *count)
 {
+    DossierExperience metadata = *d;
+    if (!charger_algorithmes(&metadata)) return 0;
     char path[LONGUEUR_CHEMIN], line[1024];
     int seen[NOMBRE_CAS * NOMBRE_TAILLES][NOMBRE_ALGORITHMES] = {{0}};
     *count = 0;
@@ -249,7 +290,8 @@ int charger_resume(const DossierExperience *d, LigneResultat *rows, int *count)
         long size = strtol(fields[1], &end, 10);
         if (!errno && !*end)
             for (int i = 0; i < NOMBRE_TAILLES; ++i) if (size == TAILLES[i]) n = (int)size;
-        if (c < 0 || a < 0 || !n || (c >= QUICK_EQUILIBRE && a != RAPIDE)) { ok = 0; break; }
+        if (c < 0 || a < 0 || !n || !(metadata.algorithmes & (1u << a)) ||
+            (c >= QUICK_EQUILIBRE && a != RAPIDE)) { ok = 0; break; }
         int r;
         for (r = 0; r < *count; ++r) if (rows[r].configuration == (Configuration)c && rows[r].taille == n) break;
         if (r == *count) {
@@ -278,7 +320,8 @@ int charger_resume(const DossierExperience *d, LigneResultat *rows, int *count)
     fclose(f);
     for (int r = 0; ok && r < *count; ++r) {
         for (int a = 0; a < NOMBRE_ALGORITHMES; ++a)
-            if ((rows[r].configuration < QUICK_EQUILIBRE || a == RAPIDE) && !seen[r][a]) ok = 0;
+            if ((metadata.algorithmes & (1u << a)) &&
+                (rows[r].configuration < QUICK_EQUILIBRE || a == RAPIDE) && !seen[r][a]) ok = 0;
         if (rows[r].configuration >= QUICK_EQUILIBRE)
             for (int c = QUICK_EQUILIBRE; c <= QUICK_EGAUX; ++c)
                 if (!trouver(rows, *count, rows[r].taille, (Configuration)c)) ok = 0;
@@ -314,6 +357,8 @@ static int lire_compteur(const char *text, uint64_t maximum, uint64_t *value)
 int charger_resultats_analyse(const DossierExperience *d, LigneResultat *rows, int *count)
 {
     if (!charger_resume(d, rows, count)) return 0;
+    DossierExperience metadata = *d;
+    if (!charger_algorithmes(&metadata)) return 0;
     char path[LONGUEUR_CHEMIN], line[1024];
     if (!chemin(path, sizeof path, "%s/operations.csv", d->resultats)) return 0;
     FILE *f = fopen(path, "r");
@@ -331,7 +376,8 @@ int charger_resultats_analyse(const DossierExperience *d, LigneResultat *rows, i
             if (!strcmp(fields[0], fichier_configuration((Configuration)i))) c = i;
         for (int i = 0; i < NOMBRE_ALGORITHMES; ++i)
             if (!strcmp(fields[2], fichier_algorithme((Algorithme)i))) a = i;
-        if (c < 0 || a < 0 || !lire_compteur(fields[1], TAILLE_MAXIMALE, &size)) { ok = 0; break; }
+        if (c < 0 || a < 0 || !(metadata.algorithmes & (1u << a)) ||
+            !lire_compteur(fields[1], TAILLE_MAXIMALE, &size)) { ok = 0; break; }
         for (int i = 0; i < *count; ++i)
             if (rows[i].configuration == (Configuration)c && rows[i].taille == (int)size) r = i;
         if (r < 0 || (c >= QUICK_EQUILIBRE && a != RAPIDE) || seen[r][a]++) { ok = 0; break; }
@@ -357,7 +403,8 @@ int charger_resultats_analyse(const DossierExperience *d, LigneResultat *rows, i
     fclose(f);
     for (int r = 0; ok && r < *count; ++r)
         for (int a = 0; a < NOMBRE_ALGORITHMES; ++a)
-            if ((rows[r].configuration < QUICK_EQUILIBRE || a == RAPIDE) && !seen[r][a]) ok = 0;
+            if ((metadata.algorithmes & (1u << a)) &&
+                (rows[r].configuration < QUICK_EQUILIBRE || a == RAPIDE) && !seen[r][a]) ok = 0;
     if (!ok) fprintf(stderr, "Compteurs incomplets, malformes ou incompatibles avec le resume : %s\n", path);
     return ok;
 }

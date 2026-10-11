@@ -1,8 +1,8 @@
 #ifndef TRI_H
 #define TRI_H
 #include <stdint.h>
-#define NOMBRE_ALGORITHMES 6
-typedef enum { SELECTION, BULLES, INSERTION, RAPIDE, FUSION, TAS } Algorithme;
+#define NOMBRE_ALGORITHMES 7
+typedef enum { SELECTION, BULLES, INSERTION, RAPIDE, FUSION, TAS, SHELL } Algorithme;
 typedef struct { uint64_t comparaisons, mouvements; } Operations;
 const char *nom_algorithme(Algorithme algorithme);
 const char *fichier_algorithme(Algorithme algorithme);
